@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemoToDXF - 現場採寸メモAI CAD化支援ツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .grid-bg {
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        /* Custom scrollbar for high-fidelity tool feel */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans overflow-hidden select-none">
+
+    <!-- APPLICATION HEADER -->
+    <header class="bg-white border-b border-slate-200 px-6 py-3.5 flex flex-wrap justify-between items-center shadow-sm z-20">
+        <div class="flex items-center space-x-3">
+            <div class="bg-slate-900 text-white p-2 rounded-xl shadow-md">
+                <i data-lucide="layers" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <h1 class="text-base font-bold tracking-tight text-slate-900 flex items-center space-x-2">
+                    <span>MemoToDXF</span>
+                    <span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold border border-slate-200">v1.0-風除室版</span>
+                </h1>
+                <p class="text-xs text-slate-500">現場メモ・手書き図面をAI経由でCAD互換DXFに一発変換</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-2 mt-2 sm:mt-0">
+            <button id="btn-open-prompt" class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm shadow-indigo-100 transition-all">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <span>AIプロンプト作成・コピー</span>
+            </button>
+            <button id="btn-load-sample" class="bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all">
+                <i data-lucide="file-json" class="w-4 h-4"></i>
+                <span>サンプルJSON読込</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN WORKSPACE -->
+    <main class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+        
+        <!-- LEFT PANEL -->
+        <section class="w-full lg:w-1/3 border-r border-slate-200 bg-white flex flex-col overflow-y-auto p-5 space-y-4">
+            
+            <div class="flex justify-between items-center">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+                    <i data-lucide="code-xml" class="w-4 h-4"></i>
+                    <span>図面JSONデータペースト</span>
+                </h2>
+                <div class="flex items-center space-x-1">
+                    <label for="file-upload" class="cursor-pointer bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-all">
+                        <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                        <span>ファイル選択</span>
+                    </label>
+                    <input type="file" id="file-upload" class="hidden" accept=".json">
+                </div>
+            </div>
+
+            <div class="relative flex-1 min-h-[280px] flex flex-col border border-slate-200 rounded-xl overflow-hidden focus-within:ring-1 focus-within:ring-slate-900 focus-within:border-slate-900">
+                <textarea id="json-input" class="w-full flex-1 p-3.5 font-mono text-xs outline-none bg-slate-50/40 text-slate-800 resize-none leading-relaxed" placeholder="// AIが返したコードブロックのJSON部分をここに貼り付けるか、ファイルを読み込んでください..."></textarea>
+                <div class="absolute bottom-2.5 right-3 text-[9px] text-slate-400 font-mono tracking-widest">INPUT</div>
+            </div>
+
+            <!-- DIAGNOSTICS & STATUS -->
+            <div id="status-card" class="p-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 transition-all duration-300">
+                <div class="flex items-start space-x-3">
+                    <div id="status-icon-box" class="p-1.5 rounded-full bg-slate-200 text-slate-600">
+                        <i data-lucide="help-circle" class="w-4 h-4" id="status-icon"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h3 id="status-title" class="text-xs font-bold">データ入力待ち</h3>
+                        <p id="status-desc" class="text-[11px] text-slate-500 mt-1 leading-relaxed">右上の「AIプロンプト作成」から指示文をコピーしてAIに図面を解析させ、出力されたJSONをここに入力してください。</p>
+                    </div>
+                </div>
+                
+                <div id="error-box" class="hidden mt-3 p-3 bg-red-50/80 border border-red-100 text-red-700 rounded-lg text-[10px] font-mono whitespace-pre-wrap max-h-36 overflow-y-auto shadow-inner leading-relaxed"></div>
+                
+                <div id="error-fix-action" class="hidden mt-3">
+                    <button id="btn-copy-error-fix" class="w-full bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs py-2 px-3 rounded-lg flex items-center justify-center space-x-1.5 transition-colors shadow-sm shadow-red-100">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span>AIエラー修正指示プロンプトをコピー</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- SCHEMA ACCORDION -->
+            <details class="border border-slate-200 rounded-xl bg-slate-50/50 p-3 transition-all duration-200 group">
+                <summary class="font-bold text-xs text-slate-600 group-open:text-slate-900 cursor-pointer select-none outline-none flex items-center justify-between">
+                    <span class="flex items-center space-x-1.5">
+                        <i data-lucide="info" class="w-4 h-4 text-slate-400"></i>
+                        <span>共通図面JSONスキーマ構造</span>
+                    </span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform"></i>
+                </summary>
+                <div class="mt-3 text-[11px] text-slate-500 space-y-2 leading-relaxed max-h-48 overflow-y-auto pr-1">
+                    <p>拡張性を担保するため、AIには常に以下の統一画層（Layers）キーで構造を出力させています。</p>
+                    <ul class="space-y-1 list-disc pl-4 text-slate-600 font-mono text-[10px]">
+                        <li>existingBuildingLines (既存壁・躯体)</li>
+                        <li>vestibuleOutline (設置予定外枠)</li>
+                        <li>frames (サッシ・アルミ主要枠)</li>
+                        <li>posts / mullions (角柱・方立)</li>
+                        <li>slidingDoors / hingedDoors (引き/開き戸)</li>
+                        <li>fixedWindows (FIX窓)</li>
+                        <li>dimensions / labels / notes (寸法・文字)</li>
+                    </ul>
+                </div>
+            </details>
+
+        </section>
+
+        <!-- RIGHT CANVAS PANEL -->
+        <section class="w-full lg:w-2/3 bg-slate-100 flex flex-col relative overflow-hidden">
+            
+            <div class="absolute top-4 left-4 z-10 flex flex-wrap gap-2 items-center">
+                <div class="bg-white/95 backdrop-blur border border-slate-200 shadow-sm px-3.5 py-1.5 rounded-full text-xs font-bold flex items-center space-x-2 text-slate-700">
+                    <span id="preview-led" class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                    <span id="preview-led-text">データ未読込</span>
+                </div>
+
+                <div class="bg-white/95 backdrop-blur border border-slate-200 shadow-sm rounded-lg flex overflow-hidden">
+                    <button id="btn-zoom-in" class="p-2 hover:bg-slate-50 text-slate-600 border-r border-slate-200 transition-colors" title="拡大">
+                        <i data-lucide="zoom-in" class="w-4 h-4"></i>
+                    </button>
+                    <button id="btn-zoom-out" class="p-2 hover:bg-slate-50 text-slate-600 border-r border-slate-200 transition-colors" title="縮小">
+                        <i data-lucide="zoom-out" class="w-4 h-4"></i>
+                    </button>
+                    <button id="btn-zoom-reset" class="p-2 hover:bg-slate-50 text-slate-600 transition-colors" title="全体表示リセット">
+                        <i data-lucide="maximize" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="absolute top-4 right-4 z-10 flex items-center space-x-2">
+                <div class="bg-white/95 backdrop-blur border border-slate-200 shadow-sm rounded-xl px-3 py-1.5 flex items-center space-x-1.5">
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">CAD出力縮尺</label>
+                    <select id="cad-scale" class="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer">
+                        <option value="1">実寸 (1:1)</option>
+                        <option value="20" selected>S = 1/20 (推奨)</option>
+                        <option value="50">S = 1/50</option>
+                    </select>
+                </div>
+
+                <button id="btn-download-dxf" class="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md flex items-center space-x-2 transition-all active:scale-95 border border-slate-950" disabled>
+                    <i data-lucide="download" class="w-4.5 h-4.5"></i>
+                    <span>DXF保存</span>
+                </button>
+            </div>
+
+            <div id="viewport-canvas" class="flex-1 w-full h-full overflow-hidden relative grid-bg flex items-center justify-center cursor-grab active:cursor-grabbing">
+                <svg id="svg-canvas" class="w-full h-full max-w-full max-h-full transition-transform duration-100" viewBox="-100 -100 4000 3000">
+                    <g id="svg-group">
+                        <text x="50%" y="50%" text-anchor="middle" font-size="110" fill="#94a3b8" font-weight="500" id="svg-placeholder">JSONデータ入力後、図面プレビューが自動生成されます</text>
+                    </g>
+                </svg>
+            </div>
+
+            <div class="bg-white/95 border-t border-slate-200 py-3.5 px-4 flex flex-wrap gap-4 text-[10px] text-slate-500 justify-center shadow-sm">
+                <div class="flex items-center space-x-1.5"><span class="w-3.5 h-1.5 bg-green-500 block rounded-sm"></span><span class="font-semibold">既存躯体/壁</span></div>
+                <div class="flex items-center space-x-1.5"><span class="w-3.5 h-1.5 bg-amber-500 block rounded-sm"></span><span class="font-semibold">設置外枠</span></div>
+                <div class="flex items-center space-x-1.5"><span class="w-3.5 h-1.5 bg-slate-800 block rounded-sm"></span><span class="font-semibold">アルミ枠 (Frame)</span></div>
+                <div class="flex items-center space-x-1.5"><span class="w-3 h-3 border border-red-500 bg-red-50 block rounded-sm"></span><span class="font-semibold">柱・方立 (Post)</span></div>
+                <div class="flex items-center space-x-1.5"><span class="w-3.5 h-1.5 bg-cyan-400 block rounded-sm"></span><span class="font-semibold">ガラス面</span></div>
+                <div class="flex items-center space-x-1.5"><span class="w-3.5 h-1.5 border-t border-dashed border-purple-500 block"></span><span class="font-semibold">建具シンボル</span></div>
+                <div class="flex items-center space-x-1.5"><span class="w-3.5 h-0.5 bg-red-400 block"></span><span class="font-semibold">寸法線 (Dimension)</span></div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- PARAMETRIC PROMPT GENERATOR MODAL -->
+    <div id="prompt-modal" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+        <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh] transform scale-95 opacity-0 transition-all duration-300" id="prompt-modal-card">
+            
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <div class="flex items-center space-x-2.5">
+                    <div class="bg-indigo-50 text-indigo-600 p-2 rounded-xl border border-indigo-100">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900">AI指示用プロンプトの動的生成</h3>
+                        <p class="text-[11px] text-slate-400 font-medium">手元の測定ノートの種類に合わせ、情報を最適化してコピーできます</p>
+                    </div>
+                </div>
+                <button id="btn-close-modal" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="flex border-b border-slate-100 bg-slate-50/50 p-1 mx-6 mt-4 rounded-xl">
+                <button id="tab-pattern-a" class="flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all text-indigo-700 bg-white shadow-sm border border-slate-200/50">
+                    パターンA: 土間・既存壁寸法から設計
+                </button>
+                <button id="tab-pattern-b" class="flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800">
+                    パターンB: 風除室完成図から直接
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6 space-y-5">
+                
+                <div id="panel-pattern-a" class="space-y-4">
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1.5">
+                        <i data-lucide="text-cursor-input" class="w-3.5 h-3.5 text-slate-400"></i>
+                        <span>1. 現調測定情報を入力 (プロンプト本文に動的埋め込み)</span>
+                    </h4>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">既存土間間口 W (mm)</label>
+                            <input type="number" id="input-w" value="3000" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-slate-50/30">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">既存土間奥行 D (mm)</label>
+                            <input type="number" id="input-d" value="1800" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-slate-50/30">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">引き戸設置の希望箇所</label>
+                            <select id="input-door-pos" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white">
+                                <option value="中央配置">中央配置 (標準)</option>
+                                <option value="左寄せスライド">左寄せスライド</option>
+                                <option value="右寄せスライド">右寄せスライド</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">フレーム見込み厚 (mm)</label>
+                            <input type="number" id="input-thickness" value="70" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-slate-50/30">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="panel-pattern-b" class="hidden space-y-4">
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1.5">
+                        <i data-lucide="text-cursor-input" class="w-3.5 h-3.5 text-slate-400"></i>
+                        <span>1. 手書き完成図の構成要素セレクト</span>
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">主要建具の開閉構造</label>
+                            <select id="input-b-type" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white">
+                                <option value="2枚引違いサッシ戸">2枚引違いサッシ戸</option>
+                                <option value="スライド片引きハンガー戸">スライド片引きハンガー戸</option>
+                                <option value="親子開きドア (丁番スイング)">親子開きドア (丁番スイング)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">指定ガラスタイプ</label>
+                            <select id="input-b-glass" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-medium focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white">
+                                <option value="透明5mm単板ガラス">透明5mm単板ガラス</option>
+                                <option value="飛散防止・菱形網入りガラス">飛散防止・菱形網入りガラス</option>
+                                <option value="かすみ複層ペアガラス">かすみ複層ペアガラス</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1.5">
+                        <i data-lucide="terminal" class="w-3.5 h-3.5 text-indigo-500"></i>
+                        <span>2. 自動構成されたAI命令文 (このままChatGPTにペースト可能)</span>
+                    </h4>
+                    <div class="relative bg-slate-900 rounded-xl overflow-hidden border border-slate-950 shadow-inner">
+                        <textarea id="prompt-preview" class="w-full h-44 p-4 font-mono text-[10px] leading-relaxed text-emerald-400 bg-transparent outline-none resize-none" readonly></textarea>
+                        <div class="absolute top-2 right-2 text-[8px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded font-bold tracking-widest">OUTPUT PREVIEW</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50 rounded-b-2xl">
+                <span class="text-[10px] text-slate-400 font-semibold flex items-center space-x-1.5">
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+                    <span>図面の写真と一緒に送信すると、高精度に構造をパースします</span>
+                </span>
+                <button id="btn-copy-prompt" class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs px-5 py-2.5 rounded-xl flex items-center space-x-2 transition-all shadow-md shadow-indigo-100">
+                    <i data-lucide="copy" class="w-4 h-4"></i>
+                    <span>プロンプトをコピーして閉じる</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- TOAST ALERTS -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-slate-900 border border-slate-800 text-white text-xs font-semibold px-4.5 py-3.5 rounded-xl shadow-2xl transform translate-y-12 opacity-0 transition-all duration-300 flex items-center space-x-3">
+        <div class="p-1 rounded-full bg-emerald-500/10 text-emerald-400" id="toast-icon-box">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+        </div>
+        <div>
+            <p id="toast-title" class="font-bold">処理に成功しました</p>
+            <p id="toast-desc" class="text-[10px] text-slate-400 mt-0.5 font-medium leading-relaxed">クリップボードの保存が成功しました。</p>
+        </div>
+    </div>
+
+    <!-- CLIENT SCRIPT ENGINE -->
+    <script>
+        // Sample Windbreak Vestibule Structure Data
+        const VESTIBULE_JSON_SAMPLE = {
+            "version": "1.0",
+            "unit": "mm",
+            "drawingBounds": {
+                "min": { "x": -500, "y": -500 },
+                "max": { "x": 3500, "y": 2500 }
+            },
+            "layers": {
+                "existingBuildingLines": [
+                    { "id": "eb1", "start": { "x": -300, "y": 1800 }, "end": { "x": 3300, "y": 1800 }, "lineType": "solid" },
+                    { "id": "eb2", "start": { "x": 800, "y": 1800 }, "end": { "x": 800, "y": 2200 }, "lineType": "dashed" },
+                    { "id": "eb3", "start": { "x": 2200, "y": 1800 }, "end": { "x": 2200, "y": 2200 }, "lineType": "dashed" }
+                ],
+                "vestibuleOutline": [
+                    { "id": "vo1", "points": [{ "x": 0, "y": 1800 }, { "x": 0, "y": 0 }, { "x": 3000, "y": 0 }, { "x": 3000, "y": 1800 }], "closed": false }
+                ],
+                "frames": [
+                    { "id": "f1", "start": { "x": 0, "y": 1800 }, "end": { "x": 0, "y": 0 }, "thickness": 70, "material": "Aluminum" },
+                    { "id": "f2", "start": { "x": 0, "y": 0 }, "end": { "x": 3000, "y": 0 }, "thickness": 70, "material": "Aluminum" },
+                    { "id": "f3", "start": { "x": 3000, "y": 0 }, "end": { "x": 3000, "y": 1800 }, "thickness": 70, "material": "Aluminum" }
+                ],
+                "posts": [
+                    { "id": "p1", "position": { "x": 0, "y": 0 }, "width": 90, "depth": 90 },
+                    { "id": "p2", "position": { "x": 3000, "y": 0 }, "width": 90, "depth": 90 },
+                    { "id": "p3", "position": { "x": 900, "y": 0 }, "width": 75, "depth": 75 },
+                    { "id": "p4", "position": { "x": 2100, "y": 0 }, "width": 75, "depth": 75 }
+                ],
+                "mullions": [
+                    { "id": "m1", "start": { "x": 0, "y": 900 }, "end": { "x": 90, "y": 900 }, "thickness": 45 },
+                    { "id": "m2", "start": { "x": 2910, "y": 900 }, "end": { "x": 3000, "y": 900 }, "thickness": 45 }
+                ],
+                "glassPanels": [
+                    { "id": "g1", "points": [{ "x": 35, "y": 50 }, { "x": 35, "y": 1750 }], "glassType": "WireGlass" },
+                    { "id": "g2", "points": [{ "x": 2965, "y": 50 }, { "x": 2965, "y": 1750 }], "glassType": "WireGlass" }
+                ],
+                "slidingDoors": [
+                    { "id": "sd1", "start": { "x": 900, "y": 0 }, "end": { "x": 2100, "y": 0 }, "width": 1200, "direction": "both", "panelCount": 2 }
+                ],
+                "hingedDoors": [],
+                "fixedWindows": [
+                    { "id": "fw1", "start": { "x": 0, "y": 0 }, "end": { "x": 900, "y": 0 }, "width": 900 },
+                    { "id": "fw2", "start": { "x": 2100, "y": 0 }, "end": { "x": 3000, "y": 0 }, "width": 900 }
+                ],
+                "dimensions": [
+                    { "id": "d1", "start": { "x": 0, "y": -250 }, "end": { "x": 3000, "y": -250 }, "text": "W = 3000", "offset": -200 },
+                    { "id": "d2", "start": { "x": -250, "y": 0 }, "end": { "x": -250, "y": 1800 }, "text": "D = 1800", "offset": -200 },
+                    { "id": "d3", "start": { "x": 900, "y": -100 }, "end": { "x": 2100, "y": -100 }, "text": "開口 = 1200", "offset": -100 }
+                ],
+                "labels": [
+                    { "id": "l1", "text": "2枚引違い風除室 (ハンガー式)", "position": { "x": 1500, "y": 300 }, "height": 80 },
+                    { "id": "l2", "text": "FIX窓 (単板5mm)", "position": { "x": 450, "y": -150 }, "height": 50 },
+                    { "id": "l3", "text": "FIX窓 (単板5mm)", "position": { "x": 2550, "y": -150 }, "height": 50 }
+                ],
+                "notes": [
+                    { "id": "n1", "text": "※既存建物壁（タイル面）凹凸あり。現場にてコーキングによる取り合い調整要す。", "position": { "x": 0, "y": 2050 }, "height": 55 },
+                    { "id": "n2", "text": "※土間勾配：正面に向けて 1/100 傾斜あり、アジャスター調整必要。", "position": { "x": 0, "y": 2200 }, "height": 55 }
+                ],
+                "directionMarker": {
+                    "id": "dir1",
+                    "position": { "x": 1500, "y": -600 },
+                    "direction": 90,
+                    "label": "正面方向"
+                }
+            }
+        };
+
+        // UI Core States
+        let loadedDrawing = null;
+        let activeTab = "A";
+        let validationErrorMsg = "";
+
+        // Viewport scale and transform states
+        let zoomLevel = 1.0;
+        let panX = 0;
+        let panY = 0;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+
+        // Element Bindings
+        const jsonInput = document.getElementById('json-input');
+        const fileUpload = document.getElementById('file-upload');
+        const btnLoadSample = document.getElementById('btn-load-sample');
+        const btnDownloadDxf = document.getElementById('btn-download-dxf');
+        const selectCadScale = document.getElementById('cad-scale');
+
+        // Modal Box Elements
+        const promptModal = document.getElementById('prompt-modal');
+        const promptModalCard = document.getElementById('prompt-modal-card');
+        const btnOpenPrompt = document.getElementById('btn-open-prompt');
+        const btnCloseModal = document.getElementById('btn-close-modal');
+        const btnCopyPrompt = document.getElementById('btn-copy-prompt');
+
+        const tabPatternA = document.getElementById('tab-pattern-a');
+        const tabPatternB = document.getElementById('tab-pattern-b');
+        const panelPatternA = document.getElementById('panel-pattern-a');
+        const panelPatternB = document.getElementById('panel-pattern-b');
+        const promptPreview = document.getElementById('prompt-preview');
+
+        // Form Fields (Dynamic Prompt updates)
+        const inputW = document.getElementById('input-w');
+        const inputD = document.getElementById('input-d');
+        const inputDoorPos = document.getElementById('input-door-pos');
+        const inputThickness = document.getElementById('input-thickness');
+        const inputBType = document.getElementById('input-b-type');
+        const inputBGlass = document.getElementById('input-b-glass');
+
+        // Diagnostics Cards UI
+        const statusCard = document.getElementById('status-card');
+        const statusIcon = document.getElementById('status-icon');
+        const statusIconBox = document.getElementById('status-icon-box');
+        const statusTitle = document.getElementById('status-title');
+        const statusDesc = document.getElementById('status-desc');
+        const errorBox = document.getElementById('error-box');
+        const errorFixAction = document.getElementById('error-fix-action');
+        const btnCopyErrorFix = document.getElementById('btn-copy-error-fix');
+
+        // Canvas Overlays
+        const svgCanvas = document.getElementById('svg-canvas');
+        const svgGroup = document.getElementById('svg-group');
+        const viewportCanvas = document.getElementById('viewport-canvas');
+        const previewLed = document.getElementById('preview-led');
+        const previewLedText = document.getElementById('preview-led-text');
+
+        // Notification panels
+        const toast = document.getElementById('toast');
+        const toastTitle = document.getElementById('toast-title');
+        const toastDesc = document.getElementById('toast-desc');
+
+        // --- Core Application Entry Point ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+
+            // Primary Click Bindings
+            btnLoadSample.addEventListener('click', loadSampleData);
+            jsonInput.addEventListener('input', handleJsonInput);
+            fileUpload.addEventListener('change', handleFileUpload);
+            btnDownloadDxf.addEventListener('click', exportDxfFile);
+
+            // Modal Trigger Actions
+            btnOpenPrompt.addEventListener('click', openPromptModal);
+            btnCloseModal.addEventListener('click', closePromptModal);
+            btnCopyPrompt.addEventListener('click', copyPromptFromModal);
+            btnCopyErrorFix.addEventListener('click', copyErrorFixPrompt);
+
+            // Modal Tab Actions
+            tabPatternA.addEventListener('click', () => switchTab('A'));
+            tabPatternB.addEventListener('click', () => switchTab('B'));
+
+            // Real-time prompt update bindings
+            [inputW, inputD, inputDoorPos, inputThickness, inputBType, inputBGlass].forEach(el => {
+                if (el) el.addEventListener('input', updatePromptPreview);
+            });
+
+            // Svg Canvas Drag handlers
+            viewportCanvas.addEventListener('mousedown', startCanvasDrag);
+            window.addEventListener('mousemove', dragCanvas);
+            window.addEventListener('mouseup', stopCanvasDrag);
+
+            // Svg Zoom Actions
+            document.getElementById('btn-zoom-in').addEventListener('click', () => handleZoom(1.2));
+            document.getElementById('btn-zoom-out').addEventListener('click', () => handleZoom(0.83));
+            document.getElementById('btn-zoom-reset').addEventListener('click', resetViewport);
+        });
+
+        // --- Dynamic Feedback Alerts (Toast) ---
+        function triggerToast(title, desc, isError = false) {
+            toastTitle.textContent = title;
+            toastDesc.textContent = desc;
+            const iconBox = document.getElementById('toast-icon-box');
+            if (isError) {
+                toast.classList.add('border-red-800', 'bg-red-950');
+                toast.classList.remove('border-slate-800', 'bg-slate-900');
+                iconBox.innerHTML = '<i data-lucide="alert-octagon" class="w-4 h-4 text-red-400"></i>';
+            } else {
+                toast.classList.remove('border-red-800', 'bg-red-950');
+                toast.classList.add('border-slate-800', 'bg-slate-900');
+                iconBox.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>';
+            }
+            lucide.createIcons();
+            toast.classList.remove('translate-y-12', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-12', 'opacity-0');
+            }, 3000);
+        }
+
+        // --- Sample loader ---
+        function loadSampleData() {
+            jsonInput.value = JSON.stringify(VESTIBULE_JSON_SAMPLE, null, 4);
+            processInputJSON(jsonInput.value);
+            triggerToast("サンプル読み込み完了", "風除室のサンプル図面JSONデータを展開しました。");
+        }
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                jsonInput.value = evt.target.result;
+                processInputJSON(evt.target.result);
+                triggerToast("アップロード完了", "ファイルの読み込みに成功しました。");
+            };
+            reader.readAsText(file);
+        }
+
+        function handleJsonInput() {
+            processInputJSON(jsonInput.value);
+        }
+
+        // --- Schema Validation ---
+        function processInputJSON(rawText) {
+            if (!rawText.trim()) {
+                setValidationUIState('waiting');
+                clearCanvasDrawing();
+                return;
+            }
+            try {
+                const parsed = JSON.parse(rawText);
+                const err = validateDrawingSchema(parsed);
+                if (err) {
+                    validationErrorMsg = err;
+                    setValidationUIState('invalid_schema', err);
+                    clearCanvasDrawing();
+                    return;
+                }
+                loadedDrawing = parsed;
+                setValidationUIState('valid');
+                renderSvgPreview(parsed);
+            } catch (e) {
+                validationErrorMsg = e.message;
+                setValidationUIState('syntax_error', e.message);
+                clearCanvasDrawing();
+            }
+        }
+
+        function validateDrawingSchema(data) {
+            if (typeof data !== 'object' || data === null) return "JSON構造はオブジェクト形式で指定する必要があります。";
+            if (!data.version) return "ルートの 'version' フィールドが必要です。";
+            if (data.unit !== 'mm') return "サポートする単位 'unit' は 'mm' 限定です。";
+            if (!data.drawingBounds || !data.drawingBounds.min || !data.drawingBounds.max) return "描画領域境界 'drawingBounds' が不足しています。";
+            if (!data.layers) return "図面要素画層 'layers' が定義されていません。";
+            
+            const requiredArrays = ['existingBuildingLines', 'vestibuleOutline', 'frames', 'posts', 'slidingDoors', 'dimensions', 'labels', 'notes'];
+            for (let key of requiredArrays) {
+                if (data.layers[key] && !Array.isArray(data.layers[key])) {
+                    return `layersの要素 '${key}' は配列形式にしてください。`;
+                }
+            }
+            return null;
+        }
+
+        function setValidationUIState(state, errMsg = '') {
+            statusCard.className = "p-4 rounded-xl border transition-all duration-300 ";
+            errorBox.classList.add('hidden');
+            errorFixAction.classList.add('hidden');
+            btnDownloadDxf.disabled = true;
+
+            if (state === 'waiting') {
+                statusCard.classList.add('bg-slate-50', 'border-slate-200');
+                statusIconBox.className = "p-1.5 rounded-full bg-slate-200 text-slate-600";
+                statusIcon.setAttribute('data-lucide', 'help-circle');
+                statusTitle.textContent = "データ入力待ち";
+                statusDesc.textContent = "右上の「AIプロンプト作成・コピー」からプロンプトを作成し、AIチャットに図面画像を読ませて、返ってきたJSONを入力してください。";
+                previewLed.className = "w-2.5 h-2.5 rounded-full bg-slate-400";
+                previewLedText.textContent = "データ未読込";
+            }
+            else if (state === 'syntax_error') {
+                statusCard.classList.add('bg-red-50/50', 'border-red-200');
+                statusIconBox.className = "p-1.5 rounded-full bg-red-100 text-red-600";
+                statusIcon.setAttribute('data-lucide', 'alert-triangle');
+                statusTitle.textContent = "JSON構文エラー";
+                statusDesc.textContent = "JSONの形式にミス（カンマ漏れやカッコ不一致など）があります。";
+                errorBox.classList.remove('hidden');
+                errorBox.textContent = `[Syntax Error]\n${errMsg}`;
+                errorFixAction.classList.remove('hidden');
+                previewLed.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
+                previewLedText.textContent = "描画エラー";
+            }
+            else if (state === 'invalid_schema') {
+                statusCard.classList.add('bg-amber-50/50', 'border-amber-200');
+                statusIconBox.className = "p-1.5 rounded-full bg-amber-100 text-amber-600";
+                statusIcon.setAttribute('data-lucide', 'shield-alert');
+                statusTitle.textContent = "スキーマ不適合";
+                statusDesc.textContent = "JSON文法は正しいですが、共通図面スキーマの要件に適合していません。";
+                errorBox.classList.remove('hidden');
+                errorBox.textContent = `[Validation Error]\n${errMsg}`;
+                errorFixAction.classList.remove('hidden');
+                previewLed.className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
+                previewLedText.textContent = "描画エラー";
+            }
+            else if (state === 'valid') {
+                statusCard.classList.add('bg-emerald-50/50', 'border-emerald-200');
+                statusIconBox.className = "p-1.5 rounded-full bg-emerald-100 text-emerald-600";
+                statusIcon.setAttribute('data-lucide', 'check-circle');
+                statusTitle.textContent = "検証成功 (Valid)";
+                statusDesc.textContent = "スキーマ検証を無事にクリアしました。CAD用のDXFファイル保存ボタンが有効になります。";
+                btnDownloadDxf.disabled = false;
+                previewLed.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-md shadow-emerald-100";
+                previewLedText.textContent = "描画中 (正常)";
+            }
+            lucide.createIcons();
+        }
+
+        function clearCanvasDrawing() {
+            svgGroup.innerHTML = '<text x="1500" y="800" text-anchor="middle" font-size="100" fill="#94a3b8" font-weight="500" id="svg-placeholder">JSONデータを左エディタに入力すると、風除室の図面が描画されます。</text>';
+            loadedDrawing = null;
+        }
+
+        // --- AI Error Recover ---
+        function copyErrorFixPrompt() {
+            const recoveryString = `# 命令
+あなたが生成したJSONオブジェクトを読み込ませたところ、以下のスキーマ検証エラー（バリデーション失敗）が発生しました。
+
+## エラー検知ログ
+${validationErrorMsg}
+
+## 再出力の要請
+上記のエラーの原因を正確に修正し、スキーマの条件を完全に満たす valid な JSON コードブロックのみを再生成してください。
+マークダウン以外の日本語の説明や余計な解説文は一切不要です。`;
+
+            navigator.clipboard.writeText(recoveryString)
+                .then(() => triggerToast("コピー成功", "再デバッグ用の命令プロンプトをクリップボードにコピーしました。"))
+                .catch(() => {
+                    const dummy = document.createElement('textarea');
+                    dummy.value = recoveryString;
+                    document.body.appendChild(dummy);
+                    dummy.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(dummy);
+                    triggerToast("コピー成功", "再デバッグ用の命令プロンプトをクリップボードにコピーしました。");
+                });
+        }
+
+        // --- INTERACTIVE PROMPT MODAL WINDOW ---
+        function openPromptModal() {
+            promptModal.classList.remove('hidden');
+            setTimeout(() => {
+                promptModalCard.classList.remove('scale-95', 'opacity-0');
+                promptModalCard.classList.add('scale-100', 'opacity-100');
+            }, 50);
+            updatePromptPreview();
+        }
+
+        function closePromptModal() {
+            promptModalCard.classList.add('scale-95', 'opacity-0');
+            promptModalCard.classList.remove('scale-100', 'opacity-100');
+            setTimeout(() => promptModal.classList.add('hidden'), 200);
+        }
+
+        function switchTab(targetTab) {
+            activeTab = targetTab;
+            if (targetTab === 'A') {
+                tabPatternA.className = "flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all text-indigo-700 bg-white shadow-sm border border-slate-200/50";
+                tabPatternB.className = "flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800";
+                panelPatternA.classList.remove('hidden');
+                panelPatternB.classList.add('hidden');
+            } else {
+                tabPatternA.className = "flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all text-slate-500 hover:text-slate-800";
+                tabPatternB.className = "flex-1 py-2 text-center text-xs font-bold rounded-lg transition-all text-indigo-700 bg-white shadow-sm border border-slate-200/50";
+                panelPatternA.classList.add('hidden');
+                panelPatternB.classList.remove('hidden');
+            }
+            updatePromptPreview();
+        }
+
+        function updatePromptPreview() {
+            let pStr = "";
+            if (activeTab === 'A') {
+                const w = inputW.value || "3000";
+                const d = inputD.value || "1800";
+                const pos = inputDoorPos.value || "中央配置";
+                const th = inputThickness.value || "70";
+
+                pStr = `# 命令
+手書きの「土間や既存躯体の採寸図」をもとに、以下の寸法・条件を満たす風除室平面図の構造JSONを生成してください。余計な説明文は不要です。
+
+## 基本条件
+- 土間間口 W: ${w} mm
+- 土間奥行 D: ${d} mm
+- 引き戸設置の希望箇所: ${pos}
+- フレーム厚み（厚み見込み）: ${th} mm
+
+## 設計基準
+1. 土間の端から内側に50mmの「逃げ代」をとって風除室外枠（vestibuleOutline）のXY座標を配置する。
+2. 出隅コーナーには 90mm角のアルミ柱（posts）を配置する。
+3. 中央（引戸希望箇所）に1200mm幅の2枚引き違い引戸を割り付け、左右はFIXガラス窓で等幅配置する。`;
+            } else {
+                const type = inputBType.value;
+                const glass = inputBGlass.value;
+                pStr = `# 命令
+提示された風除室の手書き完成平面図・スケッチの数値を正確に読み取ってトレースし、指定スキーマに合致する構造JSONデータを返してください。説明は不要です。
+
+## 施工想定条件
+- サッシ建具構造: ${type}
+- ガラス素材の想定: ${glass}`;
+            }
+            promptPreview.value = pStr;
+        }
+
+        function copyPromptFromModal() {
+            const rawTxt = promptPreview.value;
+            navigator.clipboard.writeText(rawTxt).then(() => {
+                closePromptModal();
+                triggerToast("プロンプトコピー完了", "ChatGPT等の外部モーダルAIにペーストして図面画像を送信してください。");
+            });
+        }
+
+        // --- VECTOR GRAPHICS RENDER ENGINE (SVG) ---
+        function renderSvgPreview(data) {
+            svgGroup.innerHTML = '';
+            const b = data.drawingBounds;
+            svgCanvas.setAttribute('viewBox', `${b.min.x} ${-b.max.y} ${b.max.x - b.min.x} ${b.max.y - b.min.y}`);
+            
+            const l = data.layers;
+            const makeNode = (tag, attr) => {
+                const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+                for (let k in attr) node.setAttribute(k, attr[k]);
+                return node;
+            };
+
+            // 1. Existing Lines (Green)
+            l.existingBuildingLines?.forEach(line => {
+                const n = makeNode("line", { x1: line.start.x, y1: -line.start.y, x2: line.end.x, y2: -line.end.y, stroke: "#22c55e", "stroke-width": "8" });
+                if (line.lineType !== 'solid') n.setAttribute("stroke-dasharray", "15, 10");
+                svgGroup.appendChild(n);
+            });
+
+            // 2. Guidelines Outline (Amber)
+            l.vestibuleOutline?.forEach(outl => {
+                if (outl.points.length < 2) return;
+                let d = `M ${outl.points[0].x} ${-outl.points[0].y}`;
+                for (let i = 1; i < outl.points.length; i++) d += ` L ${outl.points[i].x} ${-outl.points[i].y}`;
+                if (outl.closed) d += " Z";
+                svgGroup.appendChild(makeNode("path", { d: d, stroke: "#f59e0b", "stroke-width": "4", fill: "none", "stroke-dasharray": "6, 6" }));
+            });
+
+            // 3. Profiles Sashes (Slate)
+            l.frames?.forEach(fr => {
+                svgGroup.appendChild(makeNode("line", { x1: fr.start.x, y1: -fr.start.y, x2: fr.end.x, y2: -fr.end.y, stroke: "#1e293b", "stroke-width": fr.thickness || 10, "stroke-linecap": "square" }));
+            });
+
+            // 4. Glass Panels
+            l.glassPanels?.forEach(gp => {
+                if (gp.points.length >= 2) svgGroup.appendChild(makeNode("line", { x1: gp.points[0].x, y1: -gp.points[0].y, x2: gp.points[1].x, y2: -gp.points[1].y, stroke: "#22d3ee", "stroke-width": "4" }));
+            });
+
+            // 5. Mullions
+            l.mullions?.forEach(m => {
+                svgGroup.appendChild(makeNode("line", { x1: m.start.x, y1: -m.start.y, x2: m.end.x, y2: -m.end.y, stroke: "#ef4444", "stroke-width": m.thickness || 6 }));
+            });
+
+            // 6. FIX Windows
+            l.fixedWindows?.forEach(fw => {
+                const dx = fw.end.x - fw.start.x, dy = fw.end.y - fw.start.y, len = Math.sqrt(dx*dx + dy*dy);
+                if (len === 0) return;
+                const nx = -dy / len, ny = dx / len;
+                [-1, 1].forEach(s => {
+                    svgGroup.appendChild(makeNode("line", { x1: fw.start.x + nx*20*s, y1: -(fw.start.y + ny*20*s), x2: fw.end.x + nx*20*s, y2: -(fw.end.y + ny*20*s), stroke: "#64748b", "stroke-width": "2" }));
+                });
+            });
+
+            // 7. Sliding Doors
+            l.slidingDoors?.forEach(sd => {
+                const sx = sd.start.x, sy = sd.start.y, ex = sd.end.x, ey = sd.end.y, mx = (sx+ex)/2, my = (sy+ey)/2;
+                svgGroup.appendChild(makeNode("line", { x1: sx, y1: -sy-15, x2: mx+25, y2: -my-15, stroke: "#8b5cf6", "stroke-width": "8" }));
+                svgGroup.appendChild(makeNode("line", { x1: mx-25, y1: -my+15, x2: ex, y2: -ey+15, stroke: "#8b5cf6", "stroke-width": "8" }));
+                if (sd.direction === 'right' || sd.direction === 'both') injectSvgArrow(mx+100, -my-40, mx+300, -my-40);
+                if (sd.direction === 'left' || sd.direction === 'both') injectSvgArrow(mx-100, -my+40, mx-300, -my+40);
+            });
+
+            // 8. Hinged Doors
+            l.hingedDoors?.forEach(hd => {
+                const px = hd.position.x, py = -hd.position.y, r = hd.width, isOut = hd.swing !== 'inward';
+                svgGroup.appendChild(makeNode("line", { x1: px, y1: py, x2: px, y2: py - (isOut ? r : -r), stroke: "#8b5cf6", "stroke-width": "8" }));
+                const arcPath = `M ${px} ${py - (isOut ? r : -r)} A ${r} ${r} 0 0 ${isOut ? "0" : "1"} ${px+r} ${py}`;
+                svgGroup.appendChild(makeNode("path", { d: arcPath, stroke: "#a78bfa", "stroke-width": "3", "stroke-dasharray": "8, 6", fill: "none" }));
+            });
+
+            // 9. Pillars
+            l.posts?.forEach(p => {
+                svgGroup.appendChild(makeNode("rect", { x: p.position.x - p.width/2, y: -p.position.y - p.depth/2, width: p.width, height: p.depth, stroke: "#ef4444", "stroke-width": "3", fill: "#fee2e2" }));
+            });
+
+            // 10. Dimensions
+            l.dimensions?.forEach(d => {
+                const x1 = d.start.x, y1 = -d.start.y, x2 = d.end.x, y2 = -d.end.y, offset = d.offset;
+                const dx = x2 - x1, dy = y2 - y1, len = Math.sqrt(dx*dx + dy*dy);
+                if (len === 0) return;
+                const nx = -dy / len, ny = dx / len;
+                const ex1 = x1 + nx * offset, ey1 = y1 + ny * offset;
+                const ex2 = x2 + nx * offset, ey2 = y2 + ny * offset;
+
+                svgGroup.appendChild(makeNode("line", { x1: x1, y1: y1, x2: ex1 + nx*(offset>0?50:-50), y2: ey1 + ny*(offset>0?50:-50), stroke: "#f87171", "stroke-width": "2" }));
+                svgGroup.appendChild(makeNode("line", { x1: x2, y1: y2, x2: ex2 + nx*(offset>0?50:-50), y2: ey2 + ny*(offset>0?50:-50), stroke: "#f87171", "stroke-width": "2" }));
+                svgGroup.appendChild(makeNode("line", { x1: ex1, y1: ey1, x2: ex2, y2: ey2, stroke: "#f87171", "stroke-width": "2" }));
+
+                const txt = makeNode("text", { x: (ex1+ex2)/2, y: (ey1+ey2)/2 - 20, fill: "#dc2626", "font-size": "50", "font-weight": "bold", "text-anchor": "middle" });
+                txt.textContent = d.text;
+                svgGroup.appendChild(txt);
+            });
+
+            // 11. Labels & 12. Notes
+            l.labels?.forEach(lb => {
+                const t = makeNode("text", { x: lb.position.x, y: -lb.position.y, fill: "#0f172a", "font-size": lb.height * 1.2 || "60", "font-weight": "bold", "text-anchor": "middle" });
+                t.textContent = lb.text;
+                svgGroup.appendChild(t);
+            });
+            l.notes?.forEach(n => {
+                const t = makeNode("text", { x: n.position.x, y: -n.position.y, fill: "#475569", "font-size": n.height || "40" });
+                t.textContent = n.text;
+                svgGroup.appendChild(t);
+            });
+
+            // 13. Direction Indicator
+            if (l.directionMarker) {
+                const dm = l.directionMarker, px = dm.position.x, py = -dm.position.y;
+                svgGroup.appendChild(makeNode("circle", { cx: px, cy: py, r: "80", stroke: "#06b6d4", "stroke-width": "4", fill: "#ecfeff" }));
+                injectSvgArrow(px, py + 50, px, py - 50, "#06b6d4", "6");
+                const t = makeNode("text", { x: px, y: py + 120, fill: "#0891b2", "font-size": "45", "font-weight": "bold", "text-anchor": "middle" });
+                t.textContent = dm.label;
+                svgGroup.appendChild(t);
+            }
+            resetViewport();
+        }
+
+        function injectSvgArrow(x1, y1, x2, y2, color="#8b5cf6", w="4") {
+            const node = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            node.setAttribute("x1", x1); node.setAttribute("y1", y1); node.setAttribute("x2", x2); node.setAttribute("y2", y2);
+            node.setAttribute("stroke", color); node.setAttribute("stroke-width", w);
+            svgGroup.appendChild(node);
+            const rad = Math.atan2(y2 - y1, x2 - x1), h = 45;
+            const h1x = x2 - h * Math.cos(rad - Math.PI/6), h1y = y2 - h * Math.sin(rad - Math.PI/6);
+            const h2x = x2 - h * Math.cos(rad + Math.PI/6), h2y = y2 - h * Math.sin(rad + Math.PI/6);
+            const head = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            head.setAttribute("d", `M ${x2} ${y2} L ${h1x} ${h1y} L ${h2x} ${h2y} Z`);
+            head.setAttribute("fill", color);
+            svgGroup.appendChild(head);
+        }
+
+        // --- Viewport Navigation Controller (Pan & Zoom) ---
+        function handleZoom(f) { zoomLevel *= f; zoomLevel = Math.max(0.2, Math.min(zoomLevel, 5.0)); updateTransform(); }
+        function resetViewport() { zoomLevel = 1.0; panX = 0; panY = 0; updateTransform(); }
+        function updateTransform() { svgGroup.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoomLevel})`); }
+        function startCanvasDrag(e) { isDragging = true; dragStartX = e.clientX - panX; dragStartY = e.clientY - panY; }
+        function dragCanvas(e) { if (!isDragging) return; panX = e.clientX - dragStartX; panY = e.clientY - dragStartY; updateTransform(); }
+        function stopCanvasDrag() { isDragging = false; }
+
+        // --- PURE JAVASCRIPT DXF ASCII ENGINE ---
+        function exportDxfFile() {
+            if (!loadedDrawing) return;
+            try {
+                const scaleFactor = parseInt(selectCadScale.value) || 1;
+                let dxf = [];
+
+                // HEADER
+                dxf.push("  0", "SECTION", "  2", "HEADER", "  0", "ENDSEC");
+                dxf.push("  0", "SECTION", "  2", "TABLES", "  0", "TABLE", "  2", "LTYPE");
+                dxf.push("  0", "LTYPE", "  2", "SOLID", " 70", "0", "  3", "Solid line", " 72", "65", " 73", "0", " 40", "0.0");
+                dxf.push("  0", "ENDTAB");
+
+                // LAYERS
+                const layers = [
+                    { n: "EXISTING_BUILDING", c: 3 }, { n: "VESTIBULE_OUTLINE", c: 2 },
+                    { n: "FRAME", c: 7 }, { n: "POST", c: 1 }, { n: "MULLION", c: 1 },
+                    { n: "GLASS", c: 4 }, { n: "SLIDING_DOOR", c: 6 }, { n: "HINGED_DOOR", c: 6 },
+                    { n: "FIXED_WINDOW", c: 7 }, { n: "DIMENSION", c: 1 }, { n: "LABEL", c: 3 },
+                    { n: "NOTE", c: 2 }, { n: "DIRECTION", c: 4 }
+                ];
+                dxf.push("  0", "TABLE", "  2", "LAYER");
+                layers.forEach(lyr => dxf.push("  0", "LAYER", "  2", lyr.n, " 70", "0", " 62", lyr.c, "  6", "SOLID"));
+                dxf.push("  0", "ENDTAB", "  0", "ENDSEC");
+                dxf.push("  0", "SECTION", "  2", "BLOCKS", "  0", "ENDSEC");
+                dxf.push("  0", "SECTION", "  2", "ENTITIES");
+
+                const l = loadedDrawing.layers;
+                const dLine = (x1, y1, x2, y2, lay) => dxf.push("  0", "LINE", "  8", lay, " 10", x1, " 20", y1, " 11", x2, " 21", y2);
+                const dText = (txt, x, y, h, lay) => {
+                    const adjustedHeight = h / scaleFactor;
+                    dxf.push("  0", "TEXT", "  8", lay, " 10", x, " 20", y, " 40", adjustedHeight, "  1", txt, " 50", "0");
+                };
+
+                // Elements plot
+                l.existingBuildingLines?.forEach(line => dLine(line.start.x, line.start.y, line.end.x, line.end.y, "EXISTING_BUILDING"));
+                l.vestibuleOutline?.forEach(o => {
+                    for (let i=0; i<o.points.length-1; i++) dLine(o.points[i].x, o.points[i].y, o.points[i+1].x, o.points[i+1].y, "VESTIBULE_OUTLINE");
+                    if (o.closed) dLine(o.points[o.points.length-1].x, o.points[o.points.length-1].y, o.points[0].x, o.points[0].y, "VESTIBULE_OUTLINE");
+                });
+                l.frames?.forEach(f => dLine(f.start.x, f.start.y, f.end.x, f.end.y, "FRAME"));
+                l.mullions?.forEach(m => dLine(m.start.x, m.start.y, m.end.x, m.end.y, "MULLION"));
+                l.glassPanels?.forEach(g => g.points.length>=2 && dLine(g.points[0].x, g.points[0].y, g.points[1].x, g.points[1].y, "GLASS"));
+                
+                l.slidingDoors?.forEach(sd => {
+                    const mx = (sd.start.x+sd.end.x)/2, my = (sd.start.y+sd.end.y)/2;
+                    dLine(sd.start.x, sd.start.y-15, mx+25, my-15, "SLIDING_DOOR");
+                    dLine(mx-25, my+15, sd.end.x, sd.end.y+15, "SLIDING_DOOR");
+                    dLine(mx-100, my+40, mx-300, my+40, "SLIDING_DOOR");
+                    dLine(mx+100, my-40, mx+300, my-40, "SLIDING_DOOR");
+                });
+
+                l.hingedDoors?.forEach(hd => {
+                    const px = hd.position.x, py = hd.position.y, r = hd.width, isOut = hd.swing !== 'inward';
+                    dLine(px, py, px, py + (isOut ? r : -r), "HINGED_DOOR");
+                    let lx = px, ly = py + (isOut ? r : -r);
+                    for (let i=1; i<=6; i++) {
+                        const rad = (Math.PI/2)*(1-(i/6));
+                        const nx = px + r*Math.cos(rad), ny = py + (isOut?r:-r)*Math.sin(rad);
+                        dLine(lx, ly, nx, ny, "HINGED_DOOR");
+                        lx = nx; ly = ny;
+                    }
+                });
+
+                l.posts?.forEach(p => {
+                    const x = p.position.x - p.width/2, y = p.position.y - p.depth/2;
+                    dLine(x, y, x+p.width, y, "POST"); dLine(x+p.width, y, x+p.width, y+p.depth, "POST");
+                    dLine(x+p.width, y+p.depth, x, y+p.depth, "POST"); dLine(x, y+p.depth, x, y, "POST");
+                });
+
+                l.dimensions?.forEach(d => {
+                    const dx = d.end.x - d.start.x, dy = d.end.y - d.start.y, len = Math.sqrt(dx*dx + dy*dy);
+                    if (len === 0) return;
+                    const nx = -dy/len, ny = dx/len;
+                    const ex1 = d.start.x + nx*d.offset, ey1 = d.start.y + ny*d.offset;
+                    const ex2 = d.end.x + nx*d.offset, ey2 = d.end.y + ny*d.offset;
+                    dLine(d.start.x, d.start.y, ex1 + nx*(d.offset>0?50:-50), ey1 + ny*(d.offset>0?50:-50), "DIMENSION");
+                    dLine(d.end.x, d.end.y, ex2 + nx*(d.offset>0?50:-50), ey2 + ny*(d.offset>0?50:-50), "DIMENSION");
+                    dLine(ex1, ey1, ex2, ey2, "DIMENSION");
+                    dText(d.text, (ex1+ex2)/2 - 100, (ey1+ey2)/2 + 20, 50, "DIMENSION");
+                });
+
+                l.labels?.forEach(lb => dText(lb.text, lb.position.x - 150, lb.position.y, lb.height || 60, "LABEL"));
+                l.notes?.forEach(n => dText(n.text, n.position.x, n.position.y, n.height || 45, "NOTE"));
+
+                if (l.directionMarker) {
+                    const dm = l.directionMarker;
+                    dxf.push("  0", "CIRCLE", "  8", "DIRECTION", " 10", dm.position.x, " 20", dm.position.y, " 40", "80");
+                    dText(dm.label, dm.position.x - 100, dm.position.y - 150, 45, "DIRECTION");
+                    dLine(dm.position.x, dm.position.y - 50, dm.position.x, dm.position.y + 50, "DIRECTION");
+                    dLine(dm.position.x, dm.position.y + 50, dm.position.x - 20, dm.position.y + 20, "DIRECTION");
+                    dLine(dm.position.x, dm.position.y + 50, dm.position.x + 20, dm.position.y + 20, "DIRECTION");
+                }
+
+                dxf.push("  0", "ENDSEC", "  0", "EOF");
+                const b = new Blob([dxf.join("\n")], { type: "application/dxf;charset=utf-8" });
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(b);
+                link.download = `memo_cad_export_${Date.now()}.dxf`;
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                triggerToast("DXFエクスポート成功", `${scaleFactor === 1 ? "実寸大" : "1/" + scaleFactor}スケール用フォント調整を施して書き出しました！`);
+            } catch (ex) {
+                triggerToast("DXF出力失敗", ex.message, true);
+            }
+        }
+    </script>
+</body>
+</html>
