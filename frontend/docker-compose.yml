@@ -1,0 +1,20 @@
+# 開発用：ソースをボリュームマウントして npm run dev（ホットリロード）
+services:
+  dev:
+    image: node:22-slim
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    volumes:
+      # カレント（frontend/）をマウント
+      - .:/app
+      # node_modules はホストと混ざらないよう匿名ボリュームで保護
+      - /app/node_modules
+      # .next もコンテナ側で保持
+      - /app/.next
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      # コンテナ内ファイル監視を安定させる
+      - WATCHPACK_POLLING=true

@@ -32,6 +32,21 @@
 | サンプルJSON `VESTIBULE_JSON_SAMPLE` | L317-381 | `lib/sample-data.ts` |
 | レイヤー定義（名前・ACIカラー） | L880-889 | `lib/layers.ts` |
 
+> **UIの見た目もこのプロトタイプ `docs/html/cad (1).html` を視覚リファレンスとし、配色・余白・コンポーネント配置を踏襲する**（ロジックだけでなく外観も「同じ」に寄せる方針）。下記「UIビジュアル方針」に主要トークンを抽出。実装は shadcn/ui（slateベース）+ Tailwind で再現し、ピクセル単位の完全一致ではなく**デザイン言語の一致**を目標とする。
+
+### UIビジュアル方針（モック準拠）
+バッチ4（STEP 8）で以下を再現する。クラス例はモックの Tailwind 記述そのまま。
+
+- **全体トーン:** 背景 `bg-slate-50`／本文 `text-slate-800`、`font-sans`、1画面固定（`overflow-hidden`、スクロールは各パネル内）。角丸はボタン・カード `rounded-xl`／モーダル `rounded-2xl`／小要素 `rounded-lg`。影 `shadow-sm`〜`shadow-md`、押下 `active:scale-95`。
+- **アクセントカラー:** プライマリ＝`slate-900`（ロゴ地・DXF保存ボタン）、AI/プロンプト系＝`indigo-600`、成功＝`emerald`、エラー＝`red`。disabled は `bg-slate-200 text-slate-400`。
+- **ヘッダー:** 白地 `border-b border-slate-200 shadow-sm`。左＝`bg-slate-900` 角丸ロゴ（lucide `layers`）＋タイトル＋`v1.0-風除室版` pill バッジ＋サブコピー。右＝「AIプロンプト作成」(`indigo-600`, lucide `sparkles`)／「サンプル読込」(`slate-100`, lucide `file-json`)。
+- **レイアウト:** `main` を `flex lg:flex-row`。左カラム `lg:w-1/3`（白・`border-r`）／右カラム `lg:w-2/3`（`bg-slate-100`）。
+- **左カラム:** セクション見出しは `text-xs uppercase tracking-wider text-slate-400`＋lucideアイコン。JSON入力は `font-mono text-xs` textarea（`bg-slate-50/40`、focus-ring `slate-900`、右下に `INPUT` ラベル）。検証カードは `rounded-xl border` で状態によりアイコン/配色変化（待機=slate／error=`bg-red-50 text-red-700`＋エラーボックス＋修正コピー赤ボタン／valid=emerald系）。スキーマ早見表は `<details>`（→ shadcn `Accordion`）。
+- **右カラム:** 左上に LED ステータス pill ＋ ズーム制御（`bg-white/95 backdrop-blur` 角丸・+/−/全体表示の3ボタン）。右上に CAD縮尺 `select` pill（実寸/1:20推奨/1:50）＋ DXF保存ボタン（`bg-slate-900`、disabled スタイルあり）。中央 viewport は **ドットグリッド背景**（`radial-gradient(#cbd5e1 1px, transparent 1px)` / `20px 20px`）＋ `cursor-grab`。下部に凡例バー（色チップ＋ラベル、`text-[10px] text-slate-500`）。
+- **AIプロンプトモーダル:** オーバーレイ `bg-slate-950/60 backdrop-blur`、白カード `rounded-2xl shadow-2xl max-w-2xl`。A/B タブは pill 切替（アクティブ=白地＋`text-indigo-700`）。入力フォームは `grid-cols-2`、focus-ring `indigo-500`。プロンプトプレビューは**ターミナル風**（`bg-slate-900` ＋ `text-emerald-400 font-mono` ＋ `OUTPUT PREVIEW` ラベル）。フッターにコピーボタン（`indigo-600`）。
+- **トースト:** 右下 `bg-slate-900`、emerald アイコン、`translate-y` フェードイン。
+- **細部:** カスタムスクロールバー（幅6px、`#cbd5e1`）。アイコンは lucide-react（`layers, sparkles, file-json, upload, code-xml, info, chevron-down, zoom-in/out, maximize, download, x, copy, terminal, text-cursor-input, check-circle, help-circle` 等）。
+
 ---
 
 ## ディレクトリ構成図
@@ -91,9 +106,9 @@ field-note-cad/
 実装は以下の **5バッチ** に束ねて進める。各バッチは「大きすぎず・1つの確認ポイントで動作検証でき・1コミットにまとまる」粒度。
 **1バッチ完了ごとに Docker 上で確認 → チェックを入れて → コミット**する。原則「前のバッチが動く状態」を保ったまま次へ進む。
 
-- [ ] **バッチ1：土台づくり（STEP 0–1）**
+- [~] **バッチ1：土台づくり（STEP 0–1）** ※実装・ローカル検証は完了。Docker実行のみ未実施（本環境に docker 未インストール）
   - 内容：`frontend/` へ create-next-app、`output: 'standalone'`、shadcn/ui 初期化、Docker環境（Dockerfile / compose）構築。
-  - 完了条件：`docker compose up` で初期ページが表示され、本番同等ビルド（`docker build`→`run`）も起動する。
+  - 完了条件：`docker compose up` で初期ページが表示され、本番同等ビルド（`docker build`→`run`）も起動する。<!-- 代替検証: `npm run dev`→HTTP 200、`npm run build`→`node .next/standalone/server.js`→HTTP 200。docker での最終確認は要環境 -->
   - コミット例：`chore: scaffold Next.js frontend and Docker setup`
 
 - [ ] **バッチ2：ロジック基盤（STEP 2–5）**※UIなしの純粋ロジック
@@ -121,24 +136,28 @@ field-note-cad/
 ## 実装ステップ（チェックリスト）
 
 ### STEP 0. プロジェクト初期化
-- [ ] `npx create-next-app@latest frontend`（App Router / TypeScript / Tailwind / ESLint）をリポジトリルートで実行し、フロントエンドを `frontend/` 配下に生成。既存 `docs/` は保持する
-- [ ] 以降の作業は `frontend/` ディレクトリ内で行う
-- [ ] `frontend/next.config.ts` に `output: 'standalone'` を追加（Docker用の最小実行成果物を生成）
-- [ ] `npx shadcn@latest init` を実行
-- [ ] shadcn/ui コンポーネント追加: `button` `card` `textarea` `dialog` `tabs` `accordion` `select` `badge` `label`
-- [ ] `lucide-react` をインストール（未同梱の場合）
-- [ ] `npm run dev` で初期ページが起動することを確認
+- [x] `npx create-next-app@latest frontend`（App Router / TypeScript / Tailwind / ESLint）をリポジトリルートで実行し、フロントエンドを `frontend/` 配下に生成。既存 `docs/` は保持する
+- [x] 以降の作業は `frontend/` ディレクトリ内で行う
+- [x] `frontend/next.config.ts` に `output: 'standalone'` を追加（Docker用の最小実行成果物を生成）
+- [x] `npx shadcn@latest init` を実行
+- [x] shadcn/ui コンポーネント追加: `button` `card` `textarea` `dialog` `tabs` `accordion` `select` `badge` `label`
+- [x] `lucide-react` をインストール（未同梱の場合）<!-- shadcn init で同梱済み（^1.17.0） -->
+- [x] `npm run dev` で初期ページが起動することを確認<!-- GET / 200 確認済み -->
+
+> 実施メモ: Next.js 16.2.9 が生成された（要 Node >=20.9.0）。`tsconfig` の import alias は `@/*`、`app/` はルート直下（`src/` 不使用）。shadcn は preset `base-nova`（Radix/Lucide）で初期化。`npm run build` も成功し `.next/standalone/server.js` の生成・起動（HTTP 200）まで確認済み。
 
 ### STEP 1. Docker環境の構築（開発初期に実施・`frontend/` 配下）
 > 以降の各STEPはこのコンテナ上で動作確認する。
-- [ ] `frontend/.dockerignore` を作成（`node_modules` `.next` `.git` 等を除外）
-- [ ] 本番同等 `frontend/Dockerfile`（マルチステージ）を作成
-  - [ ] `deps` ステージ：`package*.json` を copy → `npm ci`
-  - [ ] `builder` ステージ：ソース copy → `npm run build`（standalone成果物生成）
-  - [ ] `runner` ステージ：`node:slim` に `.next/standalone` `.next/static` `public` を copy、非root実行、`CMD ["node","server.js"]`、`EXPOSE 3000`
-- [ ] 開発用 `frontend/docker-compose.yml` を作成（カレントをボリュームマウント、`command: npm run dev`、`ports: 3000:3000`、`node_modules` は匿名ボリュームで保護）
-- [ ] `docker compose up` で開発サーバが起動し、初期ページがブラウザ表示されることを確認（以降はホットリロードで反復）
-- [ ] `docker build -t fudojshitsu-cad .` → `docker run -p 3000:3000 fudojshitsu-cad` で本番同等ビルドも起動確認
+- [x] `frontend/.dockerignore` を作成（`node_modules` `.next` `.git` 等を除外）
+- [x] 本番同等 `frontend/Dockerfile`（マルチステージ）を作成
+  - [x] `deps` ステージ：`package*.json` を copy → `npm ci`
+  - [x] `builder` ステージ：ソース copy → `npm run build`（standalone成果物生成）
+  - [x] `runner` ステージ：`node:22-slim` に `.next/standalone` `.next/static` `public` を copy、非root実行、`CMD ["node","server.js"]`、`EXPOSE 3000`<!-- Node>=20.9.0要件のため node:22-slim を採用 -->
+- [x] 開発用 `frontend/docker-compose.yml` を作成（カレントをボリュームマウント、`command: npm run dev`、`ports: 3000:3000`、`node_modules` は匿名ボリュームで保護）
+- [ ] `docker compose up` で開発サーバが起動し、初期ページがブラウザ表示されることを確認（以降はホットリロードで反復）<!-- ⚠ 本環境に docker 未インストールのため未実行。代替として frontend で `npm run dev`→HTTP 200 を確認済み -->
+- [ ] `docker build -t fudojshitsu-cad .` → `docker run -p 3000:3000 fudojshitsu-cad` で本番同等ビルドも起動確認<!-- ⚠ docker 未インストールのため未実行。代替として `npm run build`→`node .next/standalone/server.js`（Dockerfile runner と同手順）でHTTP 200 を確認済み -->
+
+> 実施メモ: 本環境に Docker が未インストールのため、`docker compose up` / `docker build` は未実行。Docker が動く環境で上記2項目を実行して最終確認すること。なお Dockerfile / compose が依拠する処理（`npm ci`相当の依存解決・`npm run build`→standalone成果物・`node server.js` 起動・`npm run dev` 起動）はローカルで個別に検証済み。
 
 ### STEP 2. 型定義 — `types/drawing.ts`
 - [ ] `Point { x: number; y: number }` を定義
@@ -173,7 +192,8 @@ field-note-cad/
 - [ ] +／−／全体表示（リセット）ボタンを動作させる
 
 ### STEP 8. UI組み立て — `app/page.tsx` ＋ 子コンポーネント
-- [ ] レイアウト：ヘッダー（ロゴ / AIプロンプト生成 / サンプル読込）、左33%エディタ列・右67%プレビュー列（仕様書4章）
+> **見た目はモック `docs/html/cad (1).html` を視覚リファレンスとして踏襲する**（上記「UIビジュアル方針（モック準拠）」の配色・余白・配置トークンに従う）。実装は shadcn/ui + Tailwind で再現。
+- [ ] レイアウト：ヘッダー（ロゴ / AIプロンプト生成 / サンプル読込）、左33%エディタ列・右67%プレビュー列（仕様書4章 / モック準拠）
 - [ ] 左列：JSON入力 `Textarea` ＋ `.json` ファイル選択
 - [ ] 左列：検証結果カード（waiting / syntax_error / invalid_schema / valid の4状態でスタイル変化）
 - [ ] 左列：開閉式スキーマ早見表（`Accordion`）
