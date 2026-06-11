@@ -1,0 +1,225 @@
+# 実装手順書 — 風除室DXF生成Webアプリ
+
+`docs/spec.md`（完成版仕様書）に基づく実装手順書です。**v1.0コア機能**を対象とし、仕様書が指定する技術スタックへ移植します。
+作業の進捗は各ステップのチェックボックスで管理してください。**作業が完了したら `[ ]` を `[x]` に更新**してください。
+
+---
+
+## 0. 前提・方針
+
+- **技術スタック（仕様書3章）:** Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui + lucide-react
+- **アプリ構造:** ロジックは全てクライアント完結（SVGプレビューとDXFテキスト生成・Blobダウンロードはブラウザのみ）。サーバーサイド処理は持たない。
+- **状態管理:** React標準（useState / useEffect / Context）のみ。外部状態管理ライブラリは使わない。
+- **Docker:** **使用する（開発初期から）。** 動作確認は原則 Docker ビルドで行う。2構成を用意する：
+  - **開発用 `docker-compose`**：ソースをボリュームマウントして `npm run dev` を実行し、ホットリロードで素早く反復確認する。
+  - **本番同等 Dockerfile**：Next.js を `output: 'standalone'` でビルドするマルチステージ。本番同等環境の確認と、自宅サーバー運用時のデプロイ手段を兼ねる。
+  - STEP 1 で先にこの Docker 環境を立ち上げ、以降の各STEPはコンテナ上で動作確認しながら進める。
+- **デプロイ先:** **Firebase App Hosting（当面）**。`apphosting.yaml` で設定する。
+  - ※App Hosting は Next.js を内部で自動ビルド・実行するため、**デプロイ時に Dockerfile を直接は使わない**。Dockerfile はローカルのコンテナ実行と「自宅サーバー」運用フォールバック用という位置づけ。将来 Cloud Run / 自宅サーバーへ切り替える際は同じ Dockerfile を `docker run` で再利用する。
+- **スコープ外:** 仕様書第8章「実務拡張仕様」は **要検討の提案** であり今回は実装しません（末尾のバックログに列挙）。
+
+### 移植元リファレンス
+完成済みのバニラJSプロトタイプ `docs/html/cad (1).html`（972行）に v1.0 の全ロジックが実装済みです。以下を移植します。
+
+| ロジック | プロトタイプ箇所 | 移植先 |
+|---|---|---|
+| `validateDrawingSchema()` バリデーション | L554-568 | `lib/validation.ts` |
+| `renderSvgPreview()` SVG描画（y反転・全レイヤー） | L727-842 | `components/DrawingPreview.tsx` |
+| `injectSvgArrow()` 矢印ヘルパー | L844-856 | `lib/svg-helpers.ts` |
+| ズーム/パン制御 | L858-864 | `DrawingPreview.tsx` 内 |
+| `exportDxfFile()` R12 DXF生成 | L867-970 | `lib/dxf-generator.ts` |
+| AIプロンプトA/Bテンプレート | L684-716 | `lib/prompts.ts` |
+| サンプルJSON `VESTIBULE_JSON_SAMPLE` | L317-381 | `lib/sample-data.ts` |
+| レイヤー定義（名前・ACIカラー） | L880-889 | `lib/layers.ts` |
+
+---
+
+## ディレクトリ構成図
+
+実装完了時の想定ディレクトリ構成です。**将来のバックエンド追加に備え、フロントエンド一式は `frontend/` 配下にまとめる**モノレポ構成とします（バックエンドは将来 `backend/` を並置）。Firebase 連携ファイルはリポジトリルートに置き、App Hosting の backend ルートディレクトリを `frontend/` に向けます。
+
+```
+field-note-cad/
+├── frontend/                       # ← フロントエンド一式（Next.jsアプリのルート）
+│   ├── app/
+│   │   ├── layout.tsx              # ルートレイアウト（フォント・メタ・globals取込）
+│   │   ├── page.tsx                # メイン1画面（左エディタ33% / 右プレビュー67%）
+│   │   └── globals.css             # Tailwind ディレクティブ + テーマ変数
+│   ├── components/
+│   │   ├── ui/                     # shadcn/ui 生成物（button, card, dialog, tabs ...）
+│   │   ├── DrawingPreview.tsx      # SVGプレビュー（y反転・全レイヤー描画・ズーム/パン）
+│   │   ├── JsonEditorPanel.tsx     # 左カラム：JSON入力 + ファイル選択 + 検証結果カード
+│   │   ├── ValidationCard.tsx      # waiting/syntax_error/invalid_schema/valid の4状態表示
+│   │   ├── SchemaCheatSheet.tsx    # 開閉式 スキーマ早見表（Accordion）
+│   │   ├── PromptDialog.tsx        # AIプロンプト生成ダイアログ（Tabs: パターンA/B）
+│   │   ├── Toolbar.tsx             # ズーム制御 / CADスケール選択 / DXF保存ボタン
+│   │   └── Legend.tsx              # 下部 凡例（lib/layers.ts 由来の色分け）
+│   ├── lib/
+│   │   ├── layers.ts               # レイヤー定義（名前・ACIカラー・SVG色・線種）★単一の真実
+│   │   ├── validation.ts           # validateDrawingSchema() + JSON構文チェック
+│   │   ├── dxf-generator.ts        # generateDxf(drawing, scaleFactor): string（R12 ASCII）
+│   │   ├── prompts.ts              # buildPromptA(params) / buildPromptB(params)
+│   │   ├── sample-data.ts          # VESTIBULE_JSON_SAMPLE
+│   │   └── svg-helpers.ts          # 矢印・円弧近似などの描画ヘルパー
+│   ├── types/
+│   │   └── drawing.ts              # Drawing / Point / 各レイヤー要素のTS型
+│   ├── public/
+│   ├── Dockerfile                  # 本番同等：マルチステージ（deps→build→runner）standalone実行
+│   ├── docker-compose.yml          # 開発用：ボリュームマウント + npm run dev（ホットリロード）
+│   ├── .dockerignore               # node_modules / .next / .git 等を除外
+│   ├── apphosting.yaml             # Firebase App Hosting 設定（runConfig等）※backendルート=frontend
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── tailwind.config.ts
+│   ├── components.json             # shadcn/ui 設定
+│   └── next.config.ts              # output: 'standalone' を指定
+├── backend/                        # （将来）バックエンド追加用に予約（今回は未作成）
+├── docs/
+│   ├── spec.md                     # 仕様書（既存）
+│   ├── implementation-guide.md     # 本手順書
+│   └── html/cad (1).html           # 移植元プロトタイプ（参照用に残置）
+├── firebase.json                   # Firebase プロジェクト設定（App Hosting backend）
+└── .firebaserc                     # デフォルトプロジェクト紐付け
+```
+
+> 以降のステップで示すソースパス（`lib/...`, `components/...`, `types/...` 等）は、特記なき限り **`frontend/` 配下からの相対パス** です。`npm` コマンドや `docker build` も原則 `frontend/` ディレクトリ内で実行します。
+
+---
+
+## 作業の進め方（バッチ単位）
+
+実装は以下の **5バッチ** に束ねて進める。各バッチは「大きすぎず・1つの確認ポイントで動作検証でき・1コミットにまとまる」粒度。
+**1バッチ完了ごとに Docker 上で確認 → チェックを入れて → コミット**する。原則「前のバッチが動く状態」を保ったまま次へ進む。
+
+- [ ] **バッチ1：土台づくり（STEP 0–1）**
+  - 内容：`frontend/` へ create-next-app、`output: 'standalone'`、shadcn/ui 初期化、Docker環境（Dockerfile / compose）構築。
+  - 完了条件：`docker compose up` で初期ページが表示され、本番同等ビルド（`docker build`→`run`）も起動する。
+  - コミット例：`chore: scaffold Next.js frontend and Docker setup`
+
+- [ ] **バッチ2：ロジック基盤（STEP 2–5）**※UIなしの純粋ロジック
+  - 内容：型定義・レイヤー定義・バリデーション・サンプルデータ・プロンプト生成関数。
+  - 完了条件：型エラーなし。`VESTIBULE_JSON_SAMPLE` が `validateDrawingSchema` を通過し、`buildPromptA/B` が文字列を返すことを最小確認（一時的なテストページ or コンソール）。
+  - コミット例：`feat: add drawing types, layer defs, validation and prompts`
+
+- [ ] **バッチ3：描画とDXF出力（STEP 6–7）**
+  - 内容：DXF生成（`generateDxf`）と SVGプレビュー（`DrawingPreview`：y反転・全レイヤー・ズーム/パン）。
+  - 完了条件：サンプルJSONを渡すとプレビューが描画され、DXFがダウンロードできる（CADで開けることまで確認できれば尚良）。
+  - コミット例：`feat: add SVG preview and R12 DXF generation`
+
+- [ ] **バッチ4：UI統合（STEP 8）**
+  - 内容：1画面レイアウト、JSON入力↔プレビューのリアルタイム同期、検証カード、スキーマ早見表、AIプロンプトダイアログ、凡例。
+  - 完了条件：仕様書のエンドツーエンドフロー（貼り付け→検証→プレビュー→DXF保存、プロンプトコピー）が一通り動く。
+  - コミット例：`feat: wire up editor/preview UI and prompt dialog`
+
+- [ ] **バッチ5：仕上げ・デプロイ（STEP 9–10）**
+  - 内容：レスポンシブ・免責表示・lint、本番イメージ最終確認、Firebase App Hosting 設定とデプロイ。
+  - 完了条件：`docker build` 成功＋lintパス、App Hosting の公開URLで動作確認。
+  - コミット例：`chore: finalize build and add Firebase App Hosting config`
+
+> 進め方の運用：各バッチ着手時に「これからバッチNをやる」と宣言し、完了したらこのチェックと該当STEPのチェックを更新する。1バッチが大きいと感じたら STEP 単位でさらに区切ってよい。
+
+## 実装ステップ（チェックリスト）
+
+### STEP 0. プロジェクト初期化
+- [ ] `npx create-next-app@latest frontend`（App Router / TypeScript / Tailwind / ESLint）をリポジトリルートで実行し、フロントエンドを `frontend/` 配下に生成。既存 `docs/` は保持する
+- [ ] 以降の作業は `frontend/` ディレクトリ内で行う
+- [ ] `frontend/next.config.ts` に `output: 'standalone'` を追加（Docker用の最小実行成果物を生成）
+- [ ] `npx shadcn@latest init` を実行
+- [ ] shadcn/ui コンポーネント追加: `button` `card` `textarea` `dialog` `tabs` `accordion` `select` `badge` `label`
+- [ ] `lucide-react` をインストール（未同梱の場合）
+- [ ] `npm run dev` で初期ページが起動することを確認
+
+### STEP 1. Docker環境の構築（開発初期に実施・`frontend/` 配下）
+> 以降の各STEPはこのコンテナ上で動作確認する。
+- [ ] `frontend/.dockerignore` を作成（`node_modules` `.next` `.git` 等を除外）
+- [ ] 本番同等 `frontend/Dockerfile`（マルチステージ）を作成
+  - [ ] `deps` ステージ：`package*.json` を copy → `npm ci`
+  - [ ] `builder` ステージ：ソース copy → `npm run build`（standalone成果物生成）
+  - [ ] `runner` ステージ：`node:slim` に `.next/standalone` `.next/static` `public` を copy、非root実行、`CMD ["node","server.js"]`、`EXPOSE 3000`
+- [ ] 開発用 `frontend/docker-compose.yml` を作成（カレントをボリュームマウント、`command: npm run dev`、`ports: 3000:3000`、`node_modules` は匿名ボリュームで保護）
+- [ ] `docker compose up` で開発サーバが起動し、初期ページがブラウザ表示されることを確認（以降はホットリロードで反復）
+- [ ] `docker build -t fudojshitsu-cad .` → `docker run -p 3000:3000 fudojshitsu-cad` で本番同等ビルドも起動確認
+
+### STEP 2. 型定義 — `types/drawing.ts`
+- [ ] `Point { x: number; y: number }` を定義
+- [ ] `Drawing { version; unit; drawingBounds {min,max}; layers {...} }` を定義（仕様書5.2）
+- [ ] `layers` 配下12要素の型を定義（配列要素11種は optional 配列、`directionMarker` のみ単一オブジェクト・optional）
+
+### STEP 3. レイヤー定義 — `lib/layers.ts`
+- [ ] 仕様書6.1のレイヤー表（レイヤー名・ACIカラー番号・推奨線種）を集約
+- [ ] SVGプレビュー用の色（プロトL740-840のhex）も同ファイルに統合し、DXF生成・SVG描画・凡例の3箇所で共有する
+
+### STEP 4. バリデーション — `lib/validation.ts`
+- [ ] `validateDrawingSchema(data): string | null` を移植（プロトL554-568）
+- [ ] チェック順を仕様書7章と1対1で実装：①ルートがオブジェクト ②`version`存在 ③`unit==="mm"` ④`drawingBounds`と`min`/`max` ⑤`layers`存在 ⑥`directionMarker`以外は存在時に配列型
+- [ ] `JSON.parse` の構文チェックを別関数化し、Syntax Errorの内容を返す2段構成にする
+
+### STEP 5. サンプルデータ & プロンプト
+- [ ] `lib/sample-data.ts` に `VESTIBULE_JSON_SAMPLE` を移植（プロトL317-381）
+- [ ] `lib/prompts.ts` に `buildPromptA(params)` / `buildPromptB(params)` を実装（仕様書9章テキスト + フォーム変数 W/D/引戸位置/フレーム厚/ガラス種/建具種 差し込み）
+
+### STEP 6. DXF生成 — `lib/dxf-generator.ts`
+- [ ] `generateDxf(drawing, scaleFactor): string` を純関数化（プロトL867-970）
+- [ ] R12 ASCII構成を出力：SECTION(HEADER) / SECTION(TABLES: LTYPE, LAYER) / SECTION(BLOCKS) / SECTION(ENTITIES) / EOF
+- [ ] エンティティ LINE / TEXT / CIRCLE を実装。開き戸円弧は6本LINE近似、引き戸の方向矢印・柱の矩形・寸法テキストもプロト準拠
+- [ ] CADスケール対応：TEXT高さを `height / scaleFactor` で出力（仕様書8.5、プロトL896）
+- [ ] `Blob` + `URL.createObjectURL` でクライアントダウンロード
+
+### STEP 7. SVGプレビュー — `components/DrawingPreview.tsx`
+- [ ] `viewBox` を `drawingBounds` から算出、Y軸は `-y` で反転（仕様書5.1）
+- [ ] 全レイヤーをJSX（line/path/rect/text/circle）で宣言的に描画、色は `lib/layers.ts` 参照
+- [ ] 矢印描画ヘルパー（`lib/svg-helpers.ts` の `injectSvgArrow` 相当）を使用
+- [ ] ズーム（0.2–5.0クランプ）/ パン（ドラッグ）を `useState` + `<g transform>` で実装
+- [ ] +／−／全体表示（リセット）ボタンを動作させる
+
+### STEP 8. UI組み立て — `app/page.tsx` ＋ 子コンポーネント
+- [ ] レイアウト：ヘッダー（ロゴ / AIプロンプト生成 / サンプル読込）、左33%エディタ列・右67%プレビュー列（仕様書4章）
+- [ ] 左列：JSON入力 `Textarea` ＋ `.json` ファイル選択
+- [ ] 左列：検証結果カード（waiting / syntax_error / invalid_schema / valid の4状態でスタイル変化）
+- [ ] 左列：開閉式スキーマ早見表（`Accordion`）
+- [ ] 右列：LEDステータス、ズーム制御、CADスケール `Select`（1 / 1/20 / 1/50）、DXF保存 `Button`（valid時のみ有効）
+- [ ] 右列：`DrawingPreview` 配置、下部に凡例（`Legend` / `lib/layers.ts`由来）
+- [ ] AIプロンプトダイアログ（`Dialog` + `Tabs` パターンA/B）、フォーム入力でプレビュー更新、コピーボタン（`navigator.clipboard`）
+- [ ] リアルタイム同期：JSON文字列を `useState`、`useEffect` でパース→バリデーション→`loadedDrawing` 更新（仕様書4.1）
+- [ ] クライアントコンポーネントに `'use client'` を付与
+
+### STEP 9. 仕上げ・検証（Docker上で）
+- [ ] 免責事項・凡例の表示、PC/タブレット向けレスポンシブ確認
+- [ ] コンテナ内で `npm run lint` を通す
+- [ ] 本番同等イメージを再ビルド（`docker build`）→ `docker run` で全機能の最終動作確認
+
+### STEP 10. Firebase App Hosting デプロイ設定
+- [ ] Firebase CLI 準備（`npm i -g firebase-tools`、`firebase login`）
+- [ ] `frontend/apphosting.yaml` を作成（`runConfig` のCPU/メモリ/最大インスタンス等、必要なら環境変数）
+- [ ] `firebase init apphosting` をリポジトリルートで実行し、`firebase.json` / `.firebaserc` をルートに生成
+- [ ] App Hosting backend の **ルートディレクトリを `frontend` に設定**（モノレポ対応。バックエンド作成時に GitHub 連携の root を指定）し、リポジトリ（`develop`/`main`）と連携
+- [ ] デプロイ実行（push連携 or `firebase deploy`）し、公開URLで動作確認
+- [ ] ※App Hosting は Next.js を自動ビルドするため Dockerfile は使われない点を README/手順に明記
+
+---
+
+## 動作確認手順（実装後）
+
+- [ ] `npm run dev`（またはDockerコンテナ）で起動 → 「サンプルJSON読込」でプレビューが表示される
+- [ ] 不正JSONを入力し、エラー表示とDXFボタン無効化を確認
+  - [ ] `unit` が `"mm"` 以外 → invalid_schema
+  - [ ] `layers` の配列要素に非配列を指定 → invalid_schema
+  - [ ] 構文崩れ（カンマ抜け等） → syntax_error
+- [ ] 「DXF保存」→ 出力ファイルをLibreCAD / Jw_cad等で開き、レイヤー分け・寸法・文字高（スケール1/20）を確認
+- [ ] AIプロンプトA / B のフォーム入力反映とコピー動作を確認
+- [ ] `docker run` 起動のコンテナで上記が同様に動くことを確認
+- [ ] Firebase App Hosting の公開URLで上記が同様に動くことを確認
+
+---
+
+## 将来拡張バックログ（仕様書第8章 — 今回は実装しない）
+
+いずれも仕様書で「要検討（案）」とされ、プロトタイプ未実装。v1.0完成後に検討する。
+
+- [ ] 8.1 既存壁面との取り合い：`frames.wallClearance` によるシール逃げ・アタッチメント枠自動描画
+- [ ] 8.2 床面レベル差：`floorLevels` レイヤーと段差ライン
+- [ ] 8.3 引き戸の召し合わせ厚・有効開口幅の自動算出と補助寸法
+- [ ] 8.4 庇の出幅：`ROOF_OVERHANG` レイヤー（DASHED）と雨樋プロット記号
+- [ ] 8.5（一部実装済）CADスケール選択の高精度Jw_cad互換変換の拡充
+- [ ] 8.6 枠優先自動クランプ（外枠優先自動結合）による寸法ゆらぎ補正
+```
