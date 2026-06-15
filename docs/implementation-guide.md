@@ -111,7 +111,7 @@ field-note-cad/
   - 完了条件：`docker compose up` で初期ページが表示され、本番同等ビルド（`docker build`→`run`）も起動する。<!-- 代替検証: `npm run dev`→HTTP 200、`npm run build`→`node .next/standalone/server.js`→HTTP 200。docker での最終確認は要環境 -->
   - コミット例：`chore: scaffold Next.js frontend and Docker setup`
 
-- [ ] **バッチ2：ロジック基盤（STEP 2–5）**※UIなしの純粋ロジック
+- [x] **バッチ2：ロジック基盤（STEP 2–5）**※UIなしの純粋ロジック
   - 内容：型定義・レイヤー定義・バリデーション・サンプルデータ・プロンプト生成関数。
   - 完了条件：型エラーなし。`VESTIBULE_JSON_SAMPLE` が `validateDrawingSchema` を通過し、`buildPromptA/B` が文字列を返すことを最小確認（一時的なテストページ or コンソール）。
   - コミット例：`feat: add drawing types, layer defs, validation and prompts`
@@ -160,22 +160,22 @@ field-note-cad/
 > 実施メモ: 本環境に Docker が未インストールのため、`docker compose up` / `docker build` は未実行。Docker が動く環境で上記2項目を実行して最終確認すること。なお Dockerfile / compose が依拠する処理（`npm ci`相当の依存解決・`npm run build`→standalone成果物・`node server.js` 起動・`npm run dev` 起動）はローカルで個別に検証済み。
 
 ### STEP 2. 型定義 — `types/drawing.ts`
-- [ ] `Point { x: number; y: number }` を定義
-- [ ] `Drawing { version; unit; drawingBounds {min,max}; layers {...} }` を定義（仕様書5.2）
-- [ ] `layers` 配下12要素の型を定義（配列要素11種は optional 配列、`directionMarker` のみ単一オブジェクト・optional）
+- [x] `Point { x: number; y: number }` を定義
+- [x] `Drawing { version; unit; drawingBounds {min,max}; layers {...} }` を定義（仕様書5.2）
+- [x] `layers` 配下12要素の型を定義（配列要素11種は optional 配列、`directionMarker` のみ単一オブジェクト・optional）
 
 ### STEP 3. レイヤー定義 — `lib/layers.ts`
-- [ ] 仕様書6.1のレイヤー表（レイヤー名・ACIカラー番号・推奨線種）を集約
-- [ ] SVGプレビュー用の色（プロトL740-840のhex）も同ファイルに統合し、DXF生成・SVG描画・凡例の3箇所で共有する
+- [x] 仕様書6.1のレイヤー表（レイヤー名・ACIカラー番号・推奨線種）を集約
+- [x] SVGプレビュー用の色（プロトL740-840のhex）も同ファイルに統合し、DXF生成・SVG描画・凡例の3箇所で共有する
 
 ### STEP 4. バリデーション — `lib/validation.ts`
-- [ ] `validateDrawingSchema(data): string | null` を移植（プロトL554-568）
-- [ ] チェック順を仕様書7章と1対1で実装：①ルートがオブジェクト ②`version`存在 ③`unit==="mm"` ④`drawingBounds`と`min`/`max` ⑤`layers`存在 ⑥`directionMarker`以外は存在時に配列型
-- [ ] `JSON.parse` の構文チェックを別関数化し、Syntax Errorの内容を返す2段構成にする
+- [x] `validateDrawingSchema(data): string | null` を移植（プロトL554-568）
+- [x] チェック順を仕様書7章と1対1で実装：①ルートがオブジェクト ②`version`存在 ③`unit==="mm"` ④`drawingBounds`と`min`/`max` ⑤`layers`存在 ⑥`directionMarker`以外は存在時に配列型
+- [x] `JSON.parse` の構文チェックを別関数化し、Syntax Errorの内容を返す2段構成にする
 
 ### STEP 5. サンプルデータ & プロンプト
-- [ ] `lib/sample-data.ts` に `VESTIBULE_JSON_SAMPLE` を移植（プロトL317-381）
-- [ ] `lib/prompts.ts` に `buildPromptA(params)` / `buildPromptB(params)` を実装（仕様書9章テキスト + フォーム変数 W/D/引戸位置/フレーム厚/ガラス種/建具種 差し込み）
+- [x] `lib/sample-data.ts` に `VESTIBULE_JSON_SAMPLE` を移植（プロトL317-381）
+- [x] `lib/prompts.ts` に `buildPromptA(params)` / `buildPromptB(params)` を実装（仕様書9章テキスト + フォーム変数 W/D/引戸位置/フレーム厚/ガラス種/建具種 差し込み）
 
 ### STEP 6. DXF生成 — `lib/dxf-generator.ts`
 - [ ] `generateDxf(drawing, scaleFactor): string` を純関数化（プロトL867-970）
