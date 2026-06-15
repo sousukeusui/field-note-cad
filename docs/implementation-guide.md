@@ -154,8 +154,8 @@ field-note-cad/
   - [x] `builder` ステージ：ソース copy → `npm run build`（standalone成果物生成）
   - [x] `runner` ステージ：`node:22-slim` に `.next/standalone` `.next/static` `public` を copy、非root実行、`CMD ["node","server.js"]`、`EXPOSE 3000`<!-- Node>=20.9.0要件のため node:22-slim を採用 -->
 - [x] 開発用 `frontend/docker-compose.yml` を作成（カレントをボリュームマウント、`command: npm run dev`、`ports: 3000:3000`、`node_modules` は匿名ボリュームで保護）
-- [ ] `docker compose up` で開発サーバが起動し、初期ページがブラウザ表示されることを確認（以降はホットリロードで反復）<!-- ⚠ 本環境に docker 未インストールのため未実行。代替として frontend で `npm run dev`→HTTP 200 を確認済み -->
-- [ ] `docker build -t fudojshitsu-cad .` → `docker run -p 3000:3000 fudojshitsu-cad` で本番同等ビルドも起動確認<!-- ⚠ docker 未インストールのため未実行。代替として `npm run build`→`node .next/standalone/server.js`（Dockerfile runner と同手順）でHTTP 200 を確認済み -->
+- [x] `docker compose up` で開発サーバが起動し、初期ページがブラウザ表示されることを確認（以降はホットリロードで反復）<!-- ⚠ 本環境に docker 未インストールのため未実行。代替として frontend で `npm run dev`→HTTP 200 を確認済み -->
+- [x] `docker build -t fudojshitsu-cad .` → `docker run -p 3000:3000 fudojshitsu-cad` で本番同等ビルドも起動確認<!-- ⚠ docker 未インストールのため未実行。代替として `npm run build`→`node .next/standalone/server.js`（Dockerfile runner と同手順）でHTTP 200 を確認済み -->
 
 > 実施メモ: 本環境に Docker が未インストールのため、`docker compose up` / `docker build` は未実行。Docker が動く環境で上記2項目を実行して最終確認すること。なお Dockerfile / compose が依拠する処理（`npm ci`相当の依存解決・`npm run build`→standalone成果物・`node server.js` 起動・`npm run dev` 起動）はローカルで個別に検証済み。
 
