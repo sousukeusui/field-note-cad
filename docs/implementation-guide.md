@@ -116,7 +116,7 @@ field-note-cad/
   - 完了条件：型エラーなし。`VESTIBULE_JSON_SAMPLE` が `validateDrawingSchema` を通過し、`buildPromptA/B` が文字列を返すことを最小確認（一時的なテストページ or コンソール）。
   - コミット例：`feat: add drawing types, layer defs, validation and prompts`
 
-- [ ] **バッチ3：描画とDXF出力（STEP 6–7）**
+- [x] **バッチ3：描画とDXF出力（STEP 6–7）**
   - 内容：DXF生成（`generateDxf`）と SVGプレビュー（`DrawingPreview`：y反転・全レイヤー・ズーム/パン）。
   - 完了条件：サンプルJSONを渡すとプレビューが描画され、DXFがダウンロードできる（CADで開けることまで確認できれば尚良）。
   - コミット例：`feat: add SVG preview and R12 DXF generation`
@@ -178,18 +178,18 @@ field-note-cad/
 - [x] `lib/prompts.ts` に `buildPromptA(params)` / `buildPromptB(params)` を実装（仕様書9章テキスト + フォーム変数 W/D/引戸位置/フレーム厚/ガラス種/建具種 差し込み）
 
 ### STEP 6. DXF生成 — `lib/dxf-generator.ts`
-- [ ] `generateDxf(drawing, scaleFactor): string` を純関数化（プロトL867-970）
-- [ ] R12 ASCII構成を出力：SECTION(HEADER) / SECTION(TABLES: LTYPE, LAYER) / SECTION(BLOCKS) / SECTION(ENTITIES) / EOF
-- [ ] エンティティ LINE / TEXT / CIRCLE を実装。開き戸円弧は6本LINE近似、引き戸の方向矢印・柱の矩形・寸法テキストもプロト準拠
-- [ ] CADスケール対応：TEXT高さを `height / scaleFactor` で出力（仕様書8.5、プロトL896）
-- [ ] `Blob` + `URL.createObjectURL` でクライアントダウンロード
+- [x] `generateDxf(drawing, scaleFactor): string` を純関数化（プロトL867-970）
+- [x] R12 ASCII構成を出力：SECTION(HEADER) / SECTION(TABLES: LTYPE, LAYER) / SECTION(BLOCKS) / SECTION(ENTITIES) / EOF
+- [x] エンティティ LINE / TEXT / CIRCLE を実装。開き戸円弧は6本LINE近似、引き戸の方向矢印・柱の矩形・寸法テキストもプロト準拠
+- [x] CADスケール対応：TEXT高さを `height / scaleFactor` で出力（仕様書8.5、プロトL896）
+- [x] `Blob` + `URL.createObjectURL` でクライアントダウンロード
 
 ### STEP 7. SVGプレビュー — `components/DrawingPreview.tsx`
-- [ ] `viewBox` を `drawingBounds` から算出、Y軸は `-y` で反転（仕様書5.1）
-- [ ] 全レイヤーをJSX（line/path/rect/text/circle）で宣言的に描画、色は `lib/layers.ts` 参照
-- [ ] 矢印描画ヘルパー（`lib/svg-helpers.ts` の `injectSvgArrow` 相当）を使用
-- [ ] ズーム（0.2–5.0クランプ）/ パン（ドラッグ）を `useState` + `<g transform>` で実装
-- [ ] +／−／全体表示（リセット）ボタンを動作させる
+- [x] `viewBox` を `drawingBounds` から算出、Y軸は `-y` で反転（仕様書5.1）
+- [x] 全レイヤーをJSX（line/path/rect/text/circle）で宣言的に描画、色は `lib/layers.ts` 参照
+- [x] 矢印描画ヘルパー（`lib/svg-helpers.ts` の `injectSvgArrow` 相当）を使用
+- [x] ズーム（0.2–5.0クランプ）/ パン（ドラッグ）を `useState` + `<g transform>` で実装
+- [x] +／−／全体表示（リセット）ボタンを動作させる
 
 ### STEP 8. UI組み立て — `app/page.tsx` ＋ 子コンポーネント
 > **見た目はモック `docs/html/cad (1).html` を視覚リファレンスとして踏襲する**（上記「UIビジュアル方針（モック準拠）」の配色・余白・配置トークンに従う）。実装は shadcn/ui + Tailwind で再現。
