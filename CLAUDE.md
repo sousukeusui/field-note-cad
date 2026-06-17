@@ -22,3 +22,8 @@ export function parseDrawingJson(rawText: string): JsonParseResult { ... }
 
 - 「何をしているか」ではなく「なぜそうなっているか」を書く
 - 自明なことは書かない
+
+## コミット方針
+
+ユーザーから明示的に「コミットして」と指示があるまで `git commit` を実行しない。
+実装が完了しても、コミットせずに作業を終える。

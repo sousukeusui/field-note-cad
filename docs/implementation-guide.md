@@ -121,7 +121,7 @@ field-note-cad/
   - 完了条件：サンプルJSONを渡すとプレビューが描画され、DXFがダウンロードできる（CADで開けることまで確認できれば尚良）。
   - コミット例：`feat: add SVG preview and R12 DXF generation`
 
-- [ ] **バッチ4：UI統合（STEP 8）**
+- [x] **バッチ4：UI統合（STEP 8）**
   - 内容：1画面レイアウト、JSON入力↔プレビューのリアルタイム同期、検証カード、スキーマ早見表、AIプロンプトダイアログ、凡例。
   - 完了条件：仕様書のエンドツーエンドフロー（貼り付け→検証→プレビュー→DXF保存、プロンプトコピー）が一通り動く。
   - コミット例：`feat: wire up editor/preview UI and prompt dialog`
@@ -193,15 +193,15 @@ field-note-cad/
 
 ### STEP 8. UI組み立て — `app/page.tsx` ＋ 子コンポーネント
 > **見た目はモック `docs/html/cad (1).html` を視覚リファレンスとして踏襲する**（上記「UIビジュアル方針（モック準拠）」の配色・余白・配置トークンに従う）。実装は shadcn/ui + Tailwind で再現。
-- [ ] レイアウト：ヘッダー（ロゴ / AIプロンプト生成 / サンプル読込）、左33%エディタ列・右67%プレビュー列（仕様書4章 / モック準拠）
-- [ ] 左列：JSON入力 `Textarea` ＋ `.json` ファイル選択
-- [ ] 左列：検証結果カード（waiting / syntax_error / invalid_schema / valid の4状態でスタイル変化）
-- [ ] 左列：開閉式スキーマ早見表（`Accordion`）
-- [ ] 右列：LEDステータス、ズーム制御、CADスケール `Select`（1 / 1/20 / 1/50）、DXF保存 `Button`（valid時のみ有効）
-- [ ] 右列：`DrawingPreview` 配置、下部に凡例（`Legend` / `lib/layers.ts`由来）
-- [ ] AIプロンプトダイアログ（`Dialog` + `Tabs` パターンA/B）、フォーム入力でプレビュー更新、コピーボタン（`navigator.clipboard`）
-- [ ] リアルタイム同期：JSON文字列を `useState`、`useEffect` でパース→バリデーション→`loadedDrawing` 更新（仕様書4.1）
-- [ ] クライアントコンポーネントに `'use client'` を付与
+- [x] レイアウト：ヘッダー（ロゴ / AIプロンプト生成 / サンプル読込）、左33%エディタ列・右67%プレビュー列（仕様書4章 / モック準拠）
+- [x] 左列：JSON入力 `Textarea` ＋ `.json` ファイル選択
+- [x] 左列：検証結果カード（waiting / syntax_error / invalid_schema / valid の4状態でスタイル変化）
+- [x] 左列：開閉式スキーマ早見表（`Accordion`）
+- [x] 右列：LEDステータス、ズーム制御、CADスケール `Select`（1 / 1/20 / 1/50）、DXF保存 `Button`（valid時のみ有効）
+- [x] 右列：`DrawingPreview` 配置、下部に凡例（`Legend` / `lib/layers.ts`由来）
+- [x] AIプロンプトダイアログ（パターンA/B）、フォーム入力でプレビュー更新、コピーボタン（`navigator.clipboard`）
+- [x] リアルタイム同期：JSON文字列を `useState`、`useMemo` でパース→バリデーション→`drawing` 更新（仕様書4.1）
+- [x] クライアントコンポーネントに `'use client'` を付与
 
 ### STEP 9. 仕上げ・検証（Docker上で）
 - [ ] 免責事項・凡例の表示、PC/タブレット向けレスポンシブ確認

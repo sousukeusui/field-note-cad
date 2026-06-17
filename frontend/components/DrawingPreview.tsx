@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ZoomIn, ZoomOut, Maximize, Move } from "lucide-react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
 
 import { buildArrowHeadPoints } from "@/lib/svg-helpers";
 import { getLayerDefinition } from "@/lib/layers";
@@ -72,8 +72,16 @@ function ArrowGlyph({
   );
 }
 
+/** 外部から zoomIn / zoomOut / resetViewport を呼び出すためのハンドル */
+export type DrawingPreviewHandle = {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetViewport: () => void;
+};
+
 /** 図面データをズーム・パン操作付きの SVG でプレビューするコンポーネント */
-export function DrawingPreview({ drawing, className }: DrawingPreviewProps) {
+export const DrawingPreview = forwardRef<DrawingPreviewHandle, DrawingPreviewProps>(
+  function DrawingPreview({ drawing, className }, ref) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -117,6 +125,12 @@ export function DrawingPreview({ drawing, className }: DrawingPreviewProps) {
     setPan({ x: 0, y: 0 });
   }
 
+  useImperativeHandle(ref, () => ({
+    zoomIn: () => setZoom((z) => clampZoom(z * 1.2)),
+    zoomOut: () => setZoom((z) => clampZoom(z * 0.83)),
+    resetViewport,
+  }));
+
   function handlePointerDown(event: ReactPointerEvent<SVGSVGElement>) {
     setDragging(true);
     setPointerOrigin({ x: event.clientX - pan.x, y: event.clientY - pan.y });
@@ -132,41 +146,11 @@ export function DrawingPreview({ drawing, className }: DrawingPreviewProps) {
   }
 
   return (
-    <div className={cn("relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100", className)}>
-      <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-2 py-1 shadow-sm backdrop-blur">
-        <button
-          type="button"
-          className="rounded-full p-1.5 text-slate-700 transition hover:bg-slate-100"
-          onClick={() => zoomBy(1.2)}
-          aria-label="zoom in"
-        >
-          <ZoomIn className="size-4" />
-        </button>
-        <button
-          type="button"
-          className="rounded-full p-1.5 text-slate-700 transition hover:bg-slate-100"
-          onClick={() => zoomBy(0.83)}
-          aria-label="zoom out"
-        >
-          <ZoomOut className="size-4" />
-        </button>
-        <button
-          type="button"
-          className="rounded-full p-1.5 text-slate-700 transition hover:bg-slate-100"
-          onClick={resetViewport}
-          aria-label="reset zoom"
-        >
-          <Maximize className="size-4" />
-        </button>
-      </div>
-      <div className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-full border border-slate-200 bg-white/95 px-3 py-1.5 text-xs text-slate-600 shadow-sm backdrop-blur">
-        <Move className="size-3.5" />
-        <span>drag to pan</span>
-      </div>
+    <div className={cn("relative overflow-hidden", className)}>
 
       <svg
         viewBox={viewBox}
-        className="h-[620px] w-full cursor-grab bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px] active:cursor-grabbing"
+        className="h-full w-full cursor-grab bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px] active:cursor-grabbing"
         onPointerDown={handlePointerDown}
         role="img"
         aria-label="drawing preview"
@@ -229,7 +213,7 @@ export function DrawingPreview({ drawing, className }: DrawingPreviewProps) {
               ))}
 
               {drawing.layers.glassPanels?.map((panel, index) =>
-                panel.points.length >= 2 ? (
+                (panel.points?.length ?? 0) >= 2 ? (
                   <line
                     key={makeLineKey("glass", index)}
                     x1={panel.points[0].x}
@@ -490,4 +474,4 @@ export function DrawingPreview({ drawing, className }: DrawingPreviewProps) {
       </svg>
     </div>
   );
-}
+});
