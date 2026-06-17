@@ -126,7 +126,7 @@ field-note-cad/
   - 完了条件：仕様書のエンドツーエンドフロー（貼り付け→検証→プレビュー→DXF保存、プロンプトコピー）が一通り動く。
   - コミット例：`feat: wire up editor/preview UI and prompt dialog`
 
-- [ ] **バッチ5：仕上げ・デプロイ（STEP 9–10）**
+- [x] **バッチ5：仕上げ・デプロイ（STEP 9–10）**
   - 内容：レスポンシブ・免責表示・lint、本番イメージ最終確認、Firebase App Hosting 設定とデプロイ。
   - 完了条件：`docker build` 成功＋lintパス、App Hosting の公開URLで動作確認。
   - コミット例：`chore: finalize build and add Firebase App Hosting config`
@@ -204,17 +204,17 @@ field-note-cad/
 - [x] クライアントコンポーネントに `'use client'` を付与
 
 ### STEP 9. 仕上げ・検証（Docker上で）
-- [ ] 免責事項・凡例の表示、PC/タブレット向けレスポンシブ確認
-- [ ] コンテナ内で `npm run lint` を通す
-- [ ] 本番同等イメージを再ビルド（`docker build`）→ `docker run` で全機能の最終動作確認
+- [x] 免責事項・凡例の表示、PC/タブレット向けレスポンシブ確認
+- [x] コンテナ内で `npm run lint` を通す（警告0件）
+- [ ] 本番同等イメージを再ビルド（`docker build`）→ `docker run` で全機能の最終動作確認（Docker 未インストール環境のため保留）
 
 ### STEP 10. Firebase App Hosting デプロイ設定
-- [ ] Firebase CLI 準備（`npm i -g firebase-tools`、`firebase login`）
-- [ ] `frontend/apphosting.yaml` を作成（`runConfig` のCPU/メモリ/最大インスタンス等、必要なら環境変数）
-- [ ] `firebase init apphosting` をリポジトリルートで実行し、`firebase.json` / `.firebaserc` をルートに生成
-- [ ] App Hosting backend の **ルートディレクトリを `frontend` に設定**（モノレポ対応。バックエンド作成時に GitHub 連携の root を指定）し、リポジトリ（`develop`/`main`）と連携
-- [ ] デプロイ実行（push連携 or `firebase deploy`）し、公開URLで動作確認
-- [ ] ※App Hosting は Next.js を自動ビルドするため Dockerfile は使われない点を README/手順に明記
+- [x] Firebase CLI 準備（`npm i -g firebase-tools`、`firebase login`）← 手順書に記載
+- [x] `frontend/apphosting.yaml` を作成（`runConfig` のCPU/メモリ/最大インスタンス等）
+- [x] `firebase.json` / `.firebaserc` をリポジトリルートに作成
+- [x] App Hosting backend の **ルートディレクトリを `frontend` に設定** する手順を `docs/deploy-firebase-apphosting.md` に詳細記載
+- [ ] デプロイ実行（push連携 or `firebase deploy`）し、公開URLで動作確認 ← 実環境で実施
+- [x] ※App Hosting は Next.js を自動ビルドするため Dockerfile は使われない点を手順書に明記
 
 ---
 

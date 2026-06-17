@@ -1,7 +1,6 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
 
 import { buildArrowHeadPoints } from "@/lib/svg-helpers";
 import { getLayerDefinition } from "@/lib/layers";
@@ -114,10 +113,6 @@ export const DrawingPreview = forwardRef<DrawingPreviewHandle, DrawingPreviewPro
 
   function clampZoom(value: number) {
     return Math.max(0.2, Math.min(value, 5));
-  }
-
-  function zoomBy(factor: number) {
-    setZoom((current) => clampZoom(current * factor));
   }
 
   function resetViewport() {

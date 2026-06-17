@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { CodeXml, Upload, X, HelpCircle, AlertTriangle, ShieldAlert, CheckCircle, Info, ChevronDown, Copy } from "lucide-react";
+import { CodeXml, Upload, X, HelpCircle, AlertTriangle, ShieldAlert, CheckCircle, Info, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
