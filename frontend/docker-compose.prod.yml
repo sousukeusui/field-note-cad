@@ -1,0 +1,16 @@
+# 本番用：既存 Dockerfile（standalone runner）をビルドして常時稼働させる。
+# 開発用の docker-compose.yml とは別物。LAN 公開のみを想定。
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: field-note-cad:latest
+    ports:
+      # ホスト3000 → コンテナ3000。LAN内から http://<サーバーIP>:3000 でアクセス
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+    # サーバー再起動・クラッシュ時に自動復帰（Docker デーモン起動時に起動）
+    restart: always

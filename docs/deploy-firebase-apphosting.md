@@ -4,30 +4,70 @@ field-note-cad を Firebase App Hosting に公開するための手順書です�
 
 > **前提知識：** App Hosting は GitHub リポジトリと直接連携し、Next.js を自動ビルド・実行します。
 > `Dockerfile` はローカル/自宅サーバー用であり、App Hosting のデプロイには使用しません。
+> 自宅の Ubuntu Server で運用したい場合は [deploy-home-server-ubuntu.md](./deploy-home-server-ubuntu.md) を参照してください。
 
 ---
 
 ## 事前準備
 
-### 必要なアカウント・権限
-
 - Google アカウント
-- Firebase プロジェクト（未作成の場合は後述の手順で作成）
-- GitHub リポジトリへの push 権限
+- GitHub リポジトリへの push 権限（`main` または `develop` ブランチ）
 
-### ローカル環境の要件
+---
 
-| ツール | バージョン目安 | 確認コマンド |
-|---|---|---|
-| Node.js | 20.9.0 以上 | `node -v` |
-| npm | 10 以上 | `npm -v` |
-| Firebase CLI | 最新版 | `firebase --version` |
+## 料金について
 
-### Firebase CLI のインストール
+### プランの前提
 
-```bash
-npm install -g firebase-tools
-```
+App Hosting の利用には **Blaze プラン（従量課金）** への切り替えが必要です。
+Firebase Console → プロジェクトの設定 → 「Blaze にアップグレード」から変更できます。
+クレジットカードの登録が必要ですが、無料枠の範囲内であれば請求は発生しません。
+
+### 無料枠（毎月リセット）
+
+| 項目 | 無料枠 |
+|---|---|
+| リクエスト数 | 50万回/月 |
+| CPU | 180,000 vCPU 秒/月 |
+| メモリ | 360,000 GiB 秒/月 |
+| 下り転送（Egress） | 10 GB/月 |
+| ビルド時間 | 30 分/日 |
+
+### 無料枠超過後の単価
+
+| 項目 | 単価 |
+|---|---|
+| リクエスト | $0.0025 / 1,000 件 |
+| CPU | $0.024 / 1,000 vCPU 秒 |
+| メモリ | $0.0025 / 1,000 GiB 秒 |
+| 下り転送 | $0.12 / GB |
+| ビルド | $0.003 / ビルド分 |
+
+> 料金は変更される場合があります。最新情報は [Firebase 料金ページ](https://firebase.google.com/pricing) を確認してください。
+
+---
+
+### このアプリの概算
+
+field-note-cad は **処理がすべてブラウザ完結**（SVG描画・DXF生成・JSONバリデーション）の Next.js アプリです。サーバー側では静的ファイルを返すだけなので、CPU・メモリの消費は最小限です。
+
+**想定ユースケース：社内・個人ツールとして少人数で使用**
+
+| 条件 | 値 |
+|---|---|
+| 月間ユーザー数 | 〜10名 |
+| 1ユーザーあたりのページロード | 〜20回/月 |
+| 月間リクエスト合計 | 約 200 件 |
+| 転送データ量 | 約 50〜100 MB/月（JS バンドル込み） |
+| デプロイ頻度 | 月 5〜10 回（ビルド 2〜4 分/回） |
+
+**概算コスト：ほぼ $0/月**
+
+リクエスト数・CPU・メモリ・転送量すべて無料枠に収まります。
+ビルド時間も月 40 分以内に収まるため、実質 **月額 $0** での運用が見込めます。
+
+利用が拡大して月間ユーザーが 100 名規模になっても、静的ファイル中心の構成であれば
+無料枠内か $1〜2/月 程度に収まる見込みです。
 
 ---
 
@@ -39,29 +79,61 @@ npm install -g firebase-tools
 4. Google アナリティクスは任意（不要なら無効化）
 5. 「プロジェクトを作成」をクリック
 
-作成後、**プロジェクト ID** をメモしておく（例: `field-note-cad-xxxxx`）。
+作成後、画面上部に表示される **プロジェクト ID** をメモしておく（例: `field-note-cad-xxxxx`）。
 
 ---
 
-## STEP 2. Firebase CLI にログインする
+## STEP 2. App Hosting を有効化して backend を作成する
 
-```bash
-firebase login
-```
+1. Firebase Console の左サイドバーから **「App Hosting」** を選択する
+2. 「使ってみる」または「バックエンドを作成」をクリック
+3. 以下の項目を設定する
 
-ブラウザが開くので Google アカウントで認証する。
+| 項目 | 設定値 |
+|---|---|
+| リージョン | `asia-northeast1`（東京）を推奨 |
+| GitHub リポジトリ | 認証画面が開くので Google アカウントで GitHub を連携し、対象リポジトリを選択 |
+| ライブブランチ | `main`（または `develop`） |
+| ルートディレクトリ | `frontend` ← **必ずここを指定** |
+| バックエンド ID | 任意（例: `field-note-cad`） |
 
-認証済みかどうかは以下で確認できる:
+4. 「バックエンドを作成」をクリック
 
-```bash
-firebase projects:list
-```
+> **ルートディレクトリの指定が重要です。**
+> このリポジトリはモノレポ構成（`frontend/` にNext.jsを配置）なので、
+> `frontend` と入力しないと `package.json` が見つからずビルドに失敗します。
 
 ---
 
-## STEP 3. `.firebaserc` のプロジェクト ID を更新する
+## STEP 3. `apphosting.yaml` の設定を確認する
 
-リポジトリルートの `.firebaserc` を開き、`YOUR_FIREBASE_PROJECT_ID` を実際の ID に変更する。
+`frontend/apphosting.yaml` はリポジトリに作成済みです。
+App Hosting は自動でこのファイルを読み込んでインスタンスの設定を行います。
+
+```yaml
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  maxInstances: 3   # 同時起動するインスタンスの上限
+  minInstances: 0   # アクセスがないときはインスタンスを停止（コスト削減）
+  concurrency: 80   # 1インスタンスあたりの同時リクエスト数
+```
+
+このアプリはサーバーサイド処理を持たない静的中心の Next.js なので、この最小構成で十分です。
+
+---
+
+## STEP 4. 初回デプロイを確認する
+
+backend 作成後、Firebase Console の **「App Hosting」→ 対象 backend → 「ロールアウト」タブ** でビルドの進行状況を確認できます。
+
+ライブブランチへの push が検知されると自動でビルド・デプロイが始まります。ビルドには通常 **3〜5 分** かかります。
+
+---
+
+## STEP 5. `.firebaserc` のプロジェクト ID を更新する（CLI使用時のみ）
+
+CLIを使う場合は、リポジトリルートの `.firebaserc` を開き、`YOUR_FIREBASE_PROJECT_ID` を実際の ID に変更する。
 
 ```json
 {
@@ -71,75 +143,13 @@ firebase projects:list
 }
 ```
 
----
-
-## STEP 4. App Hosting backend を作成する
-
-リポジトリルート（`field-note-cad/`）で以下を実行する。
-
-```bash
-firebase apphosting:backends:create
-```
-
-対話式プロンプトで以下を設定する:
-
-| 質問 | 入力値 |
-|---|---|
-| Select a Firebase project | 作成したプロジェクトを選択 |
-| Provide a name for this backend | `field-note-cad`（任意） |
-| Select a region | `asia-northeast1`（東京）を推奨 |
-| Set the root directory of your app | `frontend` ← **必ずここを指定** |
-| Connect to a GitHub repository | GitHub を認証してリポジトリを選択 |
-| Set the live branch | `main`（または `develop`） |
-
-> **`frontend` の指定が重要です。** App Hosting はモノレポ構成に対応しており、
-> root directory を `frontend` に設定することで `frontend/package.json` を起点に
-> Next.js を自動ビルドします。
+> Console からの操作のみでデプロイする場合はこの手順は不要です。
 
 ---
 
-## STEP 5. `apphosting.yaml` の設定内容を確認する
+## STEP 6. 公開 URL で動作確認する
 
-`frontend/apphosting.yaml` は以下の内容で作成済みです。必要に応じて調整してください。
-
-```yaml
-runConfig:
-  cpu: 1
-  memoryMiB: 512
-  maxInstances: 3   # 同時起動するインスタンスの上限
-  minInstances: 0   # 0 にするとアクセスがないときはインスタンスを落とす（コスト削減）
-  concurrency: 80   # 1インスタンスあたりの同時リクエスト数
-```
-
-このアプリはサーバーサイド処理を持たない静的中心の Next.js なので、最小構成で十分です。
-
----
-
-## STEP 6. 初回デプロイを実行する
-
-App Hosting は GitHub の対象ブランチへの push を検知して自動ビルド・デプロイします。
-
-```bash
-git push origin main
-```
-
-Firebase Console の「App Hosting」→ 対象 backend → 「Rollouts」タブでビルドの進行状況を確認できます。
-
-ビルドには通常 3〜5 分かかります。
-
-### 手動デプロイしたい場合
-
-```bash
-firebase apphosting:backends:get
-# backend ID を確認してから
-firebase deploy --only apphosting
-```
-
----
-
-## STEP 7. 公開 URL で動作確認する
-
-デプロイ完了後、Console に表示される URL（例: `https://field-note-cad-xxxxx.web.app`）にアクセスして以下を確認する。
+デプロイ完了後、Console の「App Hosting」画面に表示される URL（例: `https://field-note-cad-xxxxx.web.app`）にアクセスして以下を確認する。
 
 - [ ] トップページが表示される
 - [ ] 「サンプルJSON読込」でプレビューが描画される
@@ -149,40 +159,125 @@ firebase deploy --only apphosting
 
 ---
 
+## カスタムドメインの設定（Cloudflare 使用）
+
+### 1. Cloudflare でドメインを購入する
+
+1. [cloudflare.com](https://www.cloudflare.com/) にアクセスしてログイン（アカウント未作成の場合は無料で作成）
+2. 左サイドバーの「**Domain Registration**」→「**Register Domains**」をクリック
+3. 希望のドメイン名を検索し、「**Purchase**」をクリックして購入手続きを進める
+
+**料金目安（年額・原価販売のため他社より安め）**
+
+| ドメイン | 年額目安 |
+|---|---|
+| `.com` | 約 $10〜11 |
+| `.net` | 約 $11〜12 |
+| `.dev` | 約 $13〜14 |
+| `.app` | 約 $14〜15 |
+| `.jp` | 約 $9〜10 |
+| `.io` | 約 $37〜38 |
+
+---
+
+### 2. Firebase Console でカスタムドメインを追加する
+
+1. Firebase Console の「**App Hosting**」→ 対象 backend を開く
+2. 「**ドメイン**」タブ →「**カスタムドメインを追加**」をクリック
+3. 購入したドメイン名（例: `example.com`）を入力して「続行」
+
+Firebase が以下の2種類の DNS レコードを発行します。次のステップで Cloudflare に追加します。
+
+- **TXT レコード**（ドメインの所有権確認用）
+- **CNAME レコード**（トラフィックの転送先）
+
+---
+
+### 3. Cloudflare DNS に TXT レコードを追加する（所有権確認）
+
+1. Cloudflare Console の左サイドバーから対象ドメインを選択
+2. 「**DNS**」→「**レコード**」→「**レコードを追加**」をクリック
+3. 以下のように入力する
+
+| 項目 | 入力値 |
+|---|---|
+| タイプ | `TXT` |
+| 名前 | Firebase Console に表示された値（例: `@` または `_firebase-app-hosting`） |
+| コンテンツ | Firebase Console に表示された値をそのまま入力 |
+| プロキシ | **「DNS のみ」（グレー雲）** |
+
+4. 「**保存**」をクリック
+
+---
+
+### 4. Cloudflare DNS に CNAME レコードを追加する（ルーティング）
+
+1. 同じく「**レコードを追加**」をクリック
+2. 以下のように入力する
+
+| 項目 | 入力値 |
+|---|---|
+| タイプ | `CNAME` |
+| 名前 | `www`（またはサブドメインなしなら `@`） |
+| ターゲット | Firebase Console に表示された値（例: `xxxx.web.app`） |
+| プロキシ | **「DNS のみ」（グレー雲）** ← 必須 |
+
+3. 「**保存**」をクリック
+
+> **⚠ プロキシは必ず「DNS のみ（グレー雲）」にすること**
+>
+> Cloudflare のデフォルトは「プロキシ有効（オレンジ雲）」ですが、
+> この状態だと Firebase が SSL 証明書の発行に使う検証リクエストを
+> Cloudflare が横取りしてしまい、証明書の発行に失敗します。
+> グレー雲（DNS のみ）に設定することで、リクエストが Firebase に直接届くようになります。
+
+---
+
+### 5. Firebase での検証完了を待つ
+
+Firebase Console の「ドメイン」タブでステータスが「**アクティブ**」に変わるのを確認します。DNS の伝搬には通常 **数分〜30分** かかります。
+
+SSL 証明書は Firebase が自動で発行するため、追加の設定は不要です。
+
+---
+
+## 以降の更新デプロイ
+
+ライブブランチ（`main` など）に push するたびに、App Hosting が自動でビルド・デプロイします。
+Console の「ロールアウト」タブでいつでも状況を確認・ロールバックできます。
+
+---
+
 ## トラブルシューティング
 
 ### ビルドが失敗する
 
-Firebase Console のビルドログを確認する。主な原因:
+Console の「ロールアウト」タブにあるビルドログを確認する。主な原因:
 
-- `frontend/` の指定が間違っている → STEP 4 の root directory 設定を確認
-- `package.json` の `build` スクリプトがエラー → ローカルで `npm run build` を先に確認
+- **ルートディレクトリが間違っている** → STEP 2 の設定を確認。`frontend` を指定しているか
+- **ビルドエラー** → ローカルで `cd frontend && npm run build` を先に確認
 
 ### `apphosting.yaml` が認識されない
 
-ファイルが `frontend/apphosting.yaml`（root directory の直下）に存在することを確認する。
+ファイルが `frontend/apphosting.yaml`（ルートディレクトリの直下）に存在することを確認する。
 
 ### カスタムドメインを設定したい
 
-Firebase Console → App Hosting → 対象 backend → 「ドメイン」タブ → 「カスタムドメインを追加」から設定できる。DNS の TXT レコード検証が必要。
+上記「カスタムドメインの設定（Cloudflare 使用）」セクションを参照。
 
 ---
 
-## ローカル Docker での最終確認（デプロイ前に推奨）
+## ローカル Docker での事前確認（任意）
 
-本番同等の動作を確認したい場合は、Docker でビルドして確認する。
+push 前に本番同等の動作を確認したい場合:
 
 ```bash
 cd frontend
-
-# 本番イメージをビルド
 docker build -t field-note-cad .
-
-# コンテナ起動
 docker run -p 3000:3000 field-note-cad
 ```
 
-`http://localhost:3000` で動作確認後、問題なければ push → 自動デプロイ。
+`http://localhost:3000` で確認後、問題なければ push する。
 
 ---
 
