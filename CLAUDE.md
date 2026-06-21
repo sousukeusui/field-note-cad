@@ -27,3 +27,8 @@ export function parseDrawingJson(rawText: string): JsonParseResult { ... }
 
 ユーザーから明示的に「コミットして」と指示があるまで `git commit` を実行しない。
 実装が完了しても、コミットせずに作業を終える。
+
+## プッシュ・PR方針
+
+`git push` を行ったときは、続けて `gh pr create` で PR を作成する。
+PR のタイトル・本文は変更内容を簡潔にまとめ、テストプランも記載する。
