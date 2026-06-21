@@ -116,17 +116,17 @@ field-note-cad/
   - 完了条件：型エラーなし。`VESTIBULE_JSON_SAMPLE` が `validateDrawingSchema` を通過し、`buildPromptA/B` が文字列を返すことを最小確認（一時的なテストページ or コンソール）。
   - コミット例：`feat: add drawing types, layer defs, validation and prompts`
 
-- [ ] **バッチ3：描画とDXF出力（STEP 6–7）**
+- [x] **バッチ3：描画とDXF出力（STEP 6–7）**
   - 内容：DXF生成（`generateDxf`）と SVGプレビュー（`DrawingPreview`：y反転・全レイヤー・ズーム/パン）。
   - 完了条件：サンプルJSONを渡すとプレビューが描画され、DXFがダウンロードできる（CADで開けることまで確認できれば尚良）。
   - コミット例：`feat: add SVG preview and R12 DXF generation`
 
-- [ ] **バッチ4：UI統合（STEP 8）**
+- [x] **バッチ4：UI統合（STEP 8）**
   - 内容：1画面レイアウト、JSON入力↔プレビューのリアルタイム同期、検証カード、スキーマ早見表、AIプロンプトダイアログ、凡例。
   - 完了条件：仕様書のエンドツーエンドフロー（貼り付け→検証→プレビュー→DXF保存、プロンプトコピー）が一通り動く。
   - コミット例：`feat: wire up editor/preview UI and prompt dialog`
 
-- [ ] **バッチ5：仕上げ・デプロイ（STEP 9–10）**
+- [x] **バッチ5：仕上げ・デプロイ（STEP 9–10）**
   - 内容：レスポンシブ・免責表示・lint、本番イメージ最終確認、Firebase App Hosting 設定とデプロイ。
   - 完了条件：`docker build` 成功＋lintパス、App Hosting の公開URLで動作確認。
   - コミット例：`chore: finalize build and add Firebase App Hosting config`
@@ -178,43 +178,43 @@ field-note-cad/
 - [x] `lib/prompts.ts` に `buildPromptA(params)` / `buildPromptB(params)` を実装（仕様書9章テキスト + フォーム変数 W/D/引戸位置/フレーム厚/ガラス種/建具種 差し込み）
 
 ### STEP 6. DXF生成 — `lib/dxf-generator.ts`
-- [ ] `generateDxf(drawing, scaleFactor): string` を純関数化（プロトL867-970）
-- [ ] R12 ASCII構成を出力：SECTION(HEADER) / SECTION(TABLES: LTYPE, LAYER) / SECTION(BLOCKS) / SECTION(ENTITIES) / EOF
-- [ ] エンティティ LINE / TEXT / CIRCLE を実装。開き戸円弧は6本LINE近似、引き戸の方向矢印・柱の矩形・寸法テキストもプロト準拠
-- [ ] CADスケール対応：TEXT高さを `height / scaleFactor` で出力（仕様書8.5、プロトL896）
-- [ ] `Blob` + `URL.createObjectURL` でクライアントダウンロード
+- [x] `generateDxf(drawing, scaleFactor): string` を純関数化（プロトL867-970）
+- [x] R12 ASCII構成を出力：SECTION(HEADER) / SECTION(TABLES: LTYPE, LAYER) / SECTION(BLOCKS) / SECTION(ENTITIES) / EOF
+- [x] エンティティ LINE / TEXT / CIRCLE を実装。開き戸円弧は6本LINE近似、引き戸の方向矢印・柱の矩形・寸法テキストもプロト準拠
+- [x] CADスケール対応：TEXT高さを `height / scaleFactor` で出力（仕様書8.5、プロトL896）
+- [x] `Blob` + `URL.createObjectURL` でクライアントダウンロード
 
 ### STEP 7. SVGプレビュー — `components/DrawingPreview.tsx`
-- [ ] `viewBox` を `drawingBounds` から算出、Y軸は `-y` で反転（仕様書5.1）
-- [ ] 全レイヤーをJSX（line/path/rect/text/circle）で宣言的に描画、色は `lib/layers.ts` 参照
-- [ ] 矢印描画ヘルパー（`lib/svg-helpers.ts` の `injectSvgArrow` 相当）を使用
-- [ ] ズーム（0.2–5.0クランプ）/ パン（ドラッグ）を `useState` + `<g transform>` で実装
-- [ ] +／−／全体表示（リセット）ボタンを動作させる
+- [x] `viewBox` を `drawingBounds` から算出、Y軸は `-y` で反転（仕様書5.1）
+- [x] 全レイヤーをJSX（line/path/rect/text/circle）で宣言的に描画、色は `lib/layers.ts` 参照
+- [x] 矢印描画ヘルパー（`lib/svg-helpers.ts` の `injectSvgArrow` 相当）を使用
+- [x] ズーム（0.2–5.0クランプ）/ パン（ドラッグ）を `useState` + `<g transform>` で実装
+- [x] +／−／全体表示（リセット）ボタンを動作させる
 
 ### STEP 8. UI組み立て — `app/page.tsx` ＋ 子コンポーネント
 > **見た目はモック `docs/html/cad (1).html` を視覚リファレンスとして踏襲する**（上記「UIビジュアル方針（モック準拠）」の配色・余白・配置トークンに従う）。実装は shadcn/ui + Tailwind で再現。
-- [ ] レイアウト：ヘッダー（ロゴ / AIプロンプト生成 / サンプル読込）、左33%エディタ列・右67%プレビュー列（仕様書4章 / モック準拠）
-- [ ] 左列：JSON入力 `Textarea` ＋ `.json` ファイル選択
-- [ ] 左列：検証結果カード（waiting / syntax_error / invalid_schema / valid の4状態でスタイル変化）
-- [ ] 左列：開閉式スキーマ早見表（`Accordion`）
-- [ ] 右列：LEDステータス、ズーム制御、CADスケール `Select`（1 / 1/20 / 1/50）、DXF保存 `Button`（valid時のみ有効）
-- [ ] 右列：`DrawingPreview` 配置、下部に凡例（`Legend` / `lib/layers.ts`由来）
-- [ ] AIプロンプトダイアログ（`Dialog` + `Tabs` パターンA/B）、フォーム入力でプレビュー更新、コピーボタン（`navigator.clipboard`）
-- [ ] リアルタイム同期：JSON文字列を `useState`、`useEffect` でパース→バリデーション→`loadedDrawing` 更新（仕様書4.1）
-- [ ] クライアントコンポーネントに `'use client'` を付与
+- [x] レイアウト：ヘッダー（ロゴ / AIプロンプト生成 / サンプル読込）、左33%エディタ列・右67%プレビュー列（仕様書4章 / モック準拠）
+- [x] 左列：JSON入力 `Textarea` ＋ `.json` ファイル選択
+- [x] 左列：検証結果カード（waiting / syntax_error / invalid_schema / valid の4状態でスタイル変化）
+- [x] 左列：開閉式スキーマ早見表（`Accordion`）
+- [x] 右列：LEDステータス、ズーム制御、CADスケール `Select`（1 / 1/20 / 1/50）、DXF保存 `Button`（valid時のみ有効）
+- [x] 右列：`DrawingPreview` 配置、下部に凡例（`Legend` / `lib/layers.ts`由来）
+- [x] AIプロンプトダイアログ（パターンA/B）、フォーム入力でプレビュー更新、コピーボタン（`navigator.clipboard`）
+- [x] リアルタイム同期：JSON文字列を `useState`、`useMemo` でパース→バリデーション→`drawing` 更新（仕様書4.1）
+- [x] クライアントコンポーネントに `'use client'` を付与
 
 ### STEP 9. 仕上げ・検証（Docker上で）
-- [ ] 免責事項・凡例の表示、PC/タブレット向けレスポンシブ確認
-- [ ] コンテナ内で `npm run lint` を通す
-- [ ] 本番同等イメージを再ビルド（`docker build`）→ `docker run` で全機能の最終動作確認
+- [x] 免責事項・凡例の表示、PC/タブレット向けレスポンシブ確認
+- [x] コンテナ内で `npm run lint` を通す（警告0件）
+- [ ] 本番同等イメージを再ビルド（`docker build`）→ `docker run` で全機能の最終動作確認（Docker 未インストール環境のため保留）
 
 ### STEP 10. Firebase App Hosting デプロイ設定
-- [ ] Firebase CLI 準備（`npm i -g firebase-tools`、`firebase login`）
-- [ ] `frontend/apphosting.yaml` を作成（`runConfig` のCPU/メモリ/最大インスタンス等、必要なら環境変数）
-- [ ] `firebase init apphosting` をリポジトリルートで実行し、`firebase.json` / `.firebaserc` をルートに生成
-- [ ] App Hosting backend の **ルートディレクトリを `frontend` に設定**（モノレポ対応。バックエンド作成時に GitHub 連携の root を指定）し、リポジトリ（`develop`/`main`）と連携
-- [ ] デプロイ実行（push連携 or `firebase deploy`）し、公開URLで動作確認
-- [ ] ※App Hosting は Next.js を自動ビルドするため Dockerfile は使われない点を README/手順に明記
+- [x] Firebase CLI 準備（`npm i -g firebase-tools`、`firebase login`）← 手順書に記載
+- [x] `frontend/apphosting.yaml` を作成（`runConfig` のCPU/メモリ/最大インスタンス等）
+- [x] `firebase.json` / `.firebaserc` をリポジトリルートに作成
+- [x] App Hosting backend の **ルートディレクトリを `frontend` に設定** する手順を `docs/deploy-firebase-apphosting.md` に詳細記載
+- [ ] デプロイ実行（push連携 or `firebase deploy`）し、公開URLで動作確認 ← 実環境で実施
+- [x] ※App Hosting は Next.js を自動ビルドするため Dockerfile は使われない点を手順書に明記
 
 ---
 

@@ -15,13 +15,20 @@ export type LayerKey =
 
 export interface LayerDefinition {
   key: LayerKey;
+  /** UI やログで使う日本語名 */
   displayName: string;
+  /** DXF の LAYER テーブルに登録する名前 */
   dxfName: string;
+  /** DXF ACI（AutoCAD Color Index）カラーコード */
   aciColor: number;
+  /** SVG ストローク色（16進数） */
   svgStroke: string;
+  /** SVG 塗りつぶし色（省略時は塗りなし） */
   svgFill?: string;
+  /** SVG テキスト色（省略時は svgStroke を流用） */
   svgText?: string;
   lineType: "SOLID" | "DASHED" | "TEXT";
+  /** "array" は配列要素、"object" は単一オブジェクト（directionMarker 専用） */
   elementKind: "array" | "object";
 }
 
@@ -150,6 +157,7 @@ export const LAYER_DEFINITIONS: Record<LayerKey, LayerDefinition> = {
   },
 };
 
+// 表示順と出力順を揃えるため、レイヤー順はここで一元管理する。
 export const DRAWING_LAYER_ORDER: LayerKey[] = [
   "existingBuildingLines",
   "vestibuleOutline",
@@ -166,10 +174,12 @@ export const DRAWING_LAYER_ORDER: LayerKey[] = [
   "directionMarker",
 ];
 
+// directionMarker 以外は配列として扱うため、検証用に分けておく。
 export const OPTIONAL_ARRAY_LAYER_KEYS = DRAWING_LAYER_ORDER.filter(
   (key) => key !== "directionMarker",
 ) as Exclude<LayerKey, "directionMarker">[];
 
+/** キーに対応するレイヤー定義を返す */
 export function getLayerDefinition(key: LayerKey): LayerDefinition {
   return LAYER_DEFINITIONS[key];
 }

@@ -12,7 +12,7 @@ export function buildPromptA(params: PromptAParams): string {
   return `# 命令
 あなたは優秀なサッシおよび外構（エクステリア）の図面作成アシスタントです。
 提示された「土間（ポーチ）や既存壁の寸法が描かれた平面図・採寸メモ」の画像を極めて精密に解析し、以下の【設計ルール】に従って計算・設計した、風除室（ふうじょしつ）の平面図JSONのみを出力してください。
-マークダウン箇所（前後の日本語の挨拶、説明等）は一切不要です。純粋なJSONのみを返してください。
+出力は \`\`\`json ～ \`\`\` のコードブロック形式で返してください。前後の日本語の挨拶や説明は不要です。
 
 # 単位
 - すべてミリメートル（mm）単位とします。
@@ -37,35 +37,69 @@ export function buildPromptA(params: PromptAParams): string {
 - サッシ/建具種: ${params.sashType}
 - ガラス種: ${params.glassType}
 
-# JSON Schema
+# JSON Schema（フィールド名は以下の例と完全に一致させること）
 {
 "version": "1.0",
 "unit": "mm",
 "drawingBounds": {
-"min": {"x": -500, "y": -500},
-"max": {"x": 3500, "y": 3000}
+  "min": {"x": -500, "y": -500},
+  "max": {"x": 3500, "y": 3000}
 },
 "layers": {
-"existingBuildingLines": [],
-"vestibuleOutline": [],
-"frames": [],
-"posts": [],
-"mullions": [],
-"glassPanels": [],
-"slidingDoors": [],
-"hingedDoors": [],
-"fixedWindows": [],
-"dimensions": [],
-"labels": [],
-"notes": [],
-"directionMarker": {
-  "id": "dir1",
-  "position": {"x": 1500, "y": -600},
-  "direction": 90,
-  "label": "正面方向"
+  "existingBuildingLines": [
+    {"id": "ebl1", "start": {"x": 0, "y": 1800}, "end": {"x": 3000, "y": 1800}, "lineType": "solid"}
+  ],
+  "vestibuleOutline": [
+    {"id": "vo1", "points": [{"x": 50, "y": 50}, {"x": 2950, "y": 50}, {"x": 2950, "y": 1750}, {"x": 50, "y": 1750}], "closed": true}
+  ],
+  "frames": [
+    {"id": "fr1", "start": {"x": 50, "y": 50}, "end": {"x": 2950, "y": 50}, "thickness": 70}
+  ],
+  "posts": [
+    {"id": "p1", "position": {"x": 95, "y": 95}, "width": 90, "depth": 90}
+  ],
+  "mullions": [
+    {"id": "m1", "start": {"x": 900, "y": 50}, "end": {"x": 900, "y": 120}, "thickness": 70}
+  ],
+  "glassPanels": [
+    {"id": "gp1", "points": [{"x": 120, "y": 50}, {"x": 865, "y": 50}], "glassType": "透明5mm単板ガラス"}
+  ],
+  "slidingDoors": [
+    {"id": "sd1", "start": {"x": 900, "y": 50}, "end": {"x": 2100, "y": 50}, "width": 1200, "direction": "both", "panelCount": 2}
+  ],
+  "hingedDoors": [
+    {"id": "hd1", "position": {"x": 500, "y": 50}, "width": 800, "angle": 90, "swing": "outward"}
+  ],
+  "fixedWindows": [
+    {"id": "fw1", "start": {"x": 50, "y": 50}, "end": {"x": 900, "y": 50}, "width": 850}
+  ],
+  "dimensions": [
+    {"id": "dim1", "start": {"x": 0, "y": -150}, "end": {"x": 3000, "y": -150}, "text": "土間間口 3000", "offset": -200}
+  ],
+  "labels": [
+    {"id": "lb1", "text": "風除室 2900 x 1700", "position": {"x": 1500, "y": 900}, "height": 60}
+  ],
+  "notes": [
+    {"id": "nt1", "text": "アルミフレーム見込み70mm", "position": {"x": 100, "y": -300}, "height": 45}
+  ],
+  "directionMarker": {
+    "id": "dir1",
+    "position": {"x": 1500, "y": -600},
+    "direction": 90,
+    "label": "正面方向"
+  }
 }
 }
-}
+
+## フィールド制約（必ず守ること）
+- lineType: "solid" | "dashed" | "dotted" のいずれか
+- direction (slidingDoors): "left" | "right" | "both" のいずれか
+- swing (hingedDoors): "inward" | "outward" のいずれか
+- posts の中心座標は "position" キー（"center" は不正）
+- mullions の端点は "start"/"end" キー（"center" は不正）
+- glassPanels のガラス範囲は "points" 配列（"bounds" は不正）
+- dimensions のテキストは "text" キー（"label" は不正）、"offset" は必須（数値、mm単位）
+- labels/notes には "position" と "height" が必須
 `;
 }
 
@@ -77,7 +111,7 @@ export function buildPromptB(params: PromptBParams): string {
   return `# 命令
 あなたは優秀なサッシおよび外構（エクステリア）の図面作成アシスタントです。
 提示された「手書きの風除室完成平面図・ラフスケッチ（寸法入り）」の画像を極めて精密に解析し、描かれている風除室の形状、柱位置、ドア種類、ガラス、寸法情報をすべて抽出し、以下の【JSON Schema】に完全に適合する平面図JSONのみを出力してください。
-マークダウン箇所（前後の日本語の挨拶、説明等）は一切不要です。純粋なJSONのみを返してください。
+出力は \`\`\`json ～ \`\`\` のコードブロック形式で返してください。前後の日本語の挨拶や説明は不要です。
 
 # 単位
 - すべてミリメートル（mm）単位とします。
